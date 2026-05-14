@@ -113,6 +113,28 @@ curl http://localhost:8080/api/trips/<planId> `
   -H "Authorization: Bearer <accessToken>"
 ```
 
+## SSE 流式行程生成接口
+
+创建行程并流式接收规划进度、MCP 工具结果、阶段性行程快照和 AI 增量回答：
+
+```powershell
+curl -N -X POST http://localhost:8080/api/trips/stream-plan `
+  -H "Authorization: Bearer <accessToken>" `
+  -H "Accept: text/event-stream" `
+  -H "Content-Type: application/json" `
+  -d '{"destination":"成都","startDate":"2099-06-01","days":3,"budget":3000,"peopleCount":2,"preferences":["美食","文化"],"userInput":"想吃火锅，行程不要太赶"}'
+```
+
+对已生成行程发起二次调整，并流式接收调整建议：
+
+```powershell
+curl -N -X POST http://localhost:8080/api/trips/<planId>/adjust-stream `
+  -H "Authorization: Bearer <accessToken>" `
+  -H "Accept: text/event-stream" `
+  -H "Content-Type: application/json" `
+  -d '{"instruction":"把第二天改得轻松一些，增加一家本地餐厅"}'
+```
+
 ## 工具状态接口
 
 查询当前可用的本地 MCP 风格工具：

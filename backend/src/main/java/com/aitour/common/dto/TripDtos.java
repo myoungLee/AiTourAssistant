@@ -33,6 +33,14 @@ public final class TripDtos {
     ) {
     }
 
+    /**
+     * 用户对已有行程提出二次调整时的请求体。
+     */
+    public record AdjustTripRequest(
+            @NotBlank String instruction
+    ) {
+    }
+
     public record TripSummaryResponse(
             Long id,
             String title,

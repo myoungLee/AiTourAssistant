@@ -36,8 +36,14 @@ public class OpenAiCompatibleChatClient implements AiChatClient {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 执行非流式 Chat Completions 调用；未配置密钥时返回本地摘要，保证开发环境可离线冒烟。
+     */
     @Override
     public String chat(ChatRequest request) {
+        if (properties.apiKey() == null || properties.apiKey().isBlank()) {
+            return buildLocalFallbackResponse(request);
+        }
         Map<String, Object> body = Map.of(
                 "model", properties.model(),
                 "stream", false,
@@ -64,12 +70,18 @@ public class OpenAiCompatibleChatClient implements AiChatClient {
         }
     }
 
+    /**
+     * 第一版流式实现先把完整响应作为一个增量发送，后续接入真实 SSE 响应体解析。
+     */
     @Override
     public void streamChat(ChatRequest request, Consumer<String> onDelta) {
         String response = chat(new ChatRequest(request.messages(), false));
         onDelta.accept(response);
     }
 
+    /**
+     * 构造 OpenAI-compatible HTTP 请求，统一追加 chat/completions 路径。
+     */
     private HttpRequest buildHttpRequest(Map<String, Object> body) throws JsonProcessingException {
         return HttpRequest.newBuilder()
                 .uri(URI.create(properties.baseUrl().replaceAll("/+$", "") + "/chat/completions"))
@@ -78,5 +90,17 @@ public class OpenAiCompatibleChatClient implements AiChatClient {
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
                 .build();
+    }
+
+    /**
+     * 根据最后一条用户消息生成本地兜底摘要，避免没有外部 AI Key 时阻塞主流程验证。
+     */
+    private String buildLocalFallbackResponse(ChatRequest request) {
+        String lastUserMessage = request.messages().stream()
+                .filter(message -> "user".equalsIgnoreCase(message.role()))
+                .map(ChatRequest.Message::content)
+                .reduce((first, second) -> second)
+                .orElse("请生成旅行说明");
+        return "本地 AI 摘要：" + lastUserMessage;
     }
 }
