@@ -20,15 +20,15 @@
 
 ```text
 backend/src/main/java/com/aitour/
-  api/AuthController.java
-  api/UserController.java
-  application/AuthService.java
-  application/UserProfileService.java
+  controller/AuthController.java
+  controller/UserController.java
+  service/AuthService.java
+  service/UserProfileService.java
   domain/User.java
   domain/UserProfile.java
   domain/UserStatus.java
-  infrastructure/persistence/UserMapper.java
-  infrastructure/persistence/UserProfileMapper.java
+  mapper/UserMapper.java
+  mapper/UserProfileMapper.java
   infrastructure/security/JwtAuthenticationFilter.java
   infrastructure/security/JwtProperties.java
   infrastructure/security/JwtTokenService.java
@@ -36,8 +36,8 @@ backend/src/main/java/com/aitour/
   infrastructure/security/CurrentUser.java
   infrastructure/exception/ApiException.java
   infrastructure/exception/GlobalExceptionHandler.java
-  api/dto/AuthDtos.java
-  api/dto/UserDtos.java
+  common/dto/AuthDtos.java
+  common/dto/UserDtos.java
 ```
 
 ## Task 1: 增加认证依赖和配置
@@ -114,8 +114,8 @@ BUILD SUCCESS
 - Create: `backend/src/main/java/com/aitour/domain/UserStatus.java`
 - Create: `backend/src/main/java/com/aitour/domain/User.java`
 - Create: `backend/src/main/java/com/aitour/domain/UserProfile.java`
-- Create: `backend/src/main/java/com/aitour/infrastructure/persistence/UserMapper.java`
-- Create: `backend/src/main/java/com/aitour/infrastructure/persistence/UserProfileMapper.java`
+- Create: `backend/src/main/java/com/aitour/mapper/UserMapper.java`
+- Create: `backend/src/main/java/com/aitour/mapper/UserProfileMapper.java`
 
 - [ ] **Step 1: 创建用户状态枚举**
 
@@ -189,9 +189,9 @@ public class UserProfile {
 `UserMapper.java`：
 
 ```java
-package com.aitour.infrastructure.persistence;
+package com.aitour.mapper;
 
-import com.aitour.domain.User;
+import com.aitour.common.entity.User;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 
@@ -203,9 +203,9 @@ public interface UserMapper extends BaseMapper<User> {
 `UserProfileMapper.java`：
 
 ```java
-package com.aitour.infrastructure.persistence;
+package com.aitour.mapper;
 
-import com.aitour.domain.UserProfile;
+import com.aitour.common.entity.UserProfile;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 
@@ -218,15 +218,15 @@ public interface UserProfileMapper extends BaseMapper<UserProfile> {
 
 **Files:**
 
-- Create: `backend/src/main/java/com/aitour/api/dto/AuthDtos.java`
-- Create: `backend/src/main/java/com/aitour/api/dto/UserDtos.java`
+- Create: `backend/src/main/java/com/aitour/common/dto/AuthDtos.java`
+- Create: `backend/src/main/java/com/aitour/common/dto/UserDtos.java`
 - Create: `backend/src/main/java/com/aitour/infrastructure/exception/ApiException.java`
 - Create: `backend/src/main/java/com/aitour/infrastructure/exception/GlobalExceptionHandler.java`
 
 - [ ] **Step 1: 创建认证 DTO**
 
 ```java
-package com.aitour.api.dto;
+package com.aitour.common.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -262,7 +262,7 @@ public final class AuthDtos {
 - [ ] **Step 2: 创建用户 DTO**
 
 ```java
-package com.aitour.api.dto;
+package com.aitour.common.dto;
 
 import jakarta.validation.constraints.Size;
 
@@ -305,7 +305,7 @@ public final class UserDtos {
 - [ ] **Step 3: 创建业务异常**
 
 ```java
-package com.aitour.infrastructure.exception;
+package com.aitour.common.exception;
 
 import org.springframework.http.HttpStatus;
 
@@ -332,7 +332,7 @@ public class ApiException extends RuntimeException {
 - [ ] **Step 4: 创建统一异常处理**
 
 ```java
-package com.aitour.infrastructure.exception;
+package com.aitour.common.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -533,14 +533,14 @@ public class SecurityConfig {
 
 **Files:**
 
-- Create: `backend/src/main/java/com/aitour/application/AuthService.java`
-- Create: `backend/src/main/java/com/aitour/api/AuthController.java`
-- Create: `backend/src/test/java/com/aitour/api/AuthControllerTest.java`
+- Create: `backend/src/main/java/com/aitour/service/AuthService.java`
+- Create: `backend/src/main/java/com/aitour/controller/AuthController.java`
+- Create: `backend/src/test/java/com/aitour/controller/AuthControllerTest.java`
 
 - [ ] **Step 1: 创建认证接口测试**
 
 ```java
-package com.aitour.api;
+package com.aitour.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -603,13 +603,13 @@ Expected:
 - [ ] **Step 3: 创建 `AuthService`**
 
 ```java
-package com.aitour.application;
+package com.aitour.service;
 
-import com.aitour.api.dto.AuthDtos;
-import com.aitour.domain.User;
+import com.aitour.common.dto.AuthDtos;
+import com.aitour.common.entity.User;
 import com.aitour.domain.UserStatus;
-import com.aitour.infrastructure.exception.ApiException;
-import com.aitour.infrastructure.persistence.UserMapper;
+import com.aitour.common.exception.ApiException;
+import com.aitour.mapper.UserMapper;
 import com.aitour.infrastructure.security.JwtTokenService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.http.HttpStatus;
@@ -673,10 +673,10 @@ public class AuthService {
 - [ ] **Step 4: 创建 `AuthController`**
 
 ```java
-package com.aitour.api;
+package com.aitour.controller;
 
-import com.aitour.api.dto.AuthDtos;
-import com.aitour.application.AuthService;
+import com.aitour.common.dto.AuthDtos;
+import com.aitour.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -723,14 +723,14 @@ BUILD SUCCESS
 
 **Files:**
 
-- Create: `backend/src/main/java/com/aitour/application/UserProfileService.java`
-- Create: `backend/src/main/java/com/aitour/api/UserController.java`
-- Create: `backend/src/test/java/com/aitour/api/UserControllerTest.java`
+- Create: `backend/src/main/java/com/aitour/service/UserProfileService.java`
+- Create: `backend/src/main/java/com/aitour/controller/UserController.java`
+- Create: `backend/src/test/java/com/aitour/controller/UserControllerTest.java`
 
 - [ ] **Step 1: 创建用户资料接口测试**
 
 ```java
-package com.aitour.api;
+package com.aitour.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -783,14 +783,14 @@ class UserControllerTest {
 - [ ] **Step 2: 创建 `UserProfileService`**
 
 ```java
-package com.aitour.application;
+package com.aitour.service;
 
-import com.aitour.api.dto.UserDtos;
-import com.aitour.domain.User;
-import com.aitour.domain.UserProfile;
-import com.aitour.infrastructure.exception.ApiException;
-import com.aitour.infrastructure.persistence.UserMapper;
-import com.aitour.infrastructure.persistence.UserProfileMapper;
+import com.aitour.common.dto.UserDtos;
+import com.aitour.common.entity.User;
+import com.aitour.common.entity.UserProfile;
+import com.aitour.common.exception.ApiException;
+import com.aitour.mapper.UserMapper;
+import com.aitour.mapper.UserProfileMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -854,10 +854,10 @@ public class UserProfileService {
 - [ ] **Step 3: 创建 `UserController`**
 
 ```java
-package com.aitour.api;
+package com.aitour.controller;
 
-import com.aitour.api.dto.UserDtos;
-import com.aitour.application.UserProfileService;
+import com.aitour.common.dto.UserDtos;
+import com.aitour.service.UserProfileService;
 import com.aitour.infrastructure.security.CurrentUser;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

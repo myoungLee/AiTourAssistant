@@ -26,16 +26,16 @@ backend/src/main/java/com/aitour/domain/TripPlan.java
 backend/src/main/java/com/aitour/domain/TripDay.java
 backend/src/main/java/com/aitour/domain/TripItem.java
 backend/src/main/java/com/aitour/domain/BudgetBreakdown.java
-backend/src/main/java/com/aitour/infrastructure/persistence/TripRequestMapper.java
-backend/src/main/java/com/aitour/infrastructure/persistence/TripPlanMapper.java
-backend/src/main/java/com/aitour/infrastructure/persistence/TripDayMapper.java
-backend/src/main/java/com/aitour/infrastructure/persistence/TripItemMapper.java
-backend/src/main/java/com/aitour/infrastructure/persistence/BudgetBreakdownMapper.java
-backend/src/main/java/com/aitour/api/dto/TripDtos.java
-backend/src/main/java/com/aitour/application/TripQueryService.java
-backend/src/main/java/com/aitour/application/TripDraftService.java
-backend/src/main/java/com/aitour/api/TripController.java
-backend/src/test/java/com/aitour/api/TripControllerTest.java
+backend/src/main/java/com/aitour/mapper/TripRequestMapper.java
+backend/src/main/java/com/aitour/mapper/TripPlanMapper.java
+backend/src/main/java/com/aitour/mapper/TripDayMapper.java
+backend/src/main/java/com/aitour/mapper/TripItemMapper.java
+backend/src/main/java/com/aitour/mapper/BudgetBreakdownMapper.java
+backend/src/main/java/com/aitour/common/dto/TripDtos.java
+backend/src/main/java/com/aitour/service/TripQueryService.java
+backend/src/main/java/com/aitour/service/TripDraftService.java
+backend/src/main/java/com/aitour/controller/TripController.java
+backend/src/test/java/com/aitour/controller/TripControllerTest.java
 ```
 
 ## Task 1: 创建行程表结构
@@ -171,7 +171,7 @@ BUILD SUCCESS
 - Create: `backend/src/main/java/com/aitour/domain/TripDay.java`
 - Create: `backend/src/main/java/com/aitour/domain/TripItem.java`
 - Create: `backend/src/main/java/com/aitour/domain/BudgetBreakdown.java`
-- Create: mapper files under `backend/src/main/java/com/aitour/infrastructure/persistence/`
+- Create: mapper files under `backend/src/main/java/com/aitour/mapper/`
 
 - [ ] **Step 1: 创建状态枚举**
 
@@ -224,7 +224,7 @@ public class TripRequest {
 示例：
 
 ```java
-package com.aitour.infrastructure.persistence;
+package com.aitour.mapper;
 
 import com.aitour.domain.TripPlan;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
@@ -241,13 +241,13 @@ public interface TripPlanMapper extends BaseMapper<TripPlan> {
 
 **Files:**
 
-- Create: `backend/src/main/java/com/aitour/api/dto/TripDtos.java`
-- Create: `backend/src/main/java/com/aitour/application/TripDraftService.java`
+- Create: `backend/src/main/java/com/aitour/common/dto/TripDtos.java`
+- Create: `backend/src/main/java/com/aitour/service/TripDraftService.java`
 
 - [ ] **Step 1: 创建行程 DTO**
 
 ```java
-package com.aitour.api.dto;
+package com.aitour.common.dto;
 
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.Max;
@@ -307,14 +307,14 @@ public final class TripDtos {
 - [ ] **Step 2: 创建草稿服务**
 
 ```java
-package com.aitour.application;
+package com.aitour.service;
 
-import com.aitour.api.dto.TripDtos;
+import com.aitour.common.dto.TripDtos;
 import com.aitour.domain.TripPlan;
 import com.aitour.domain.TripPlanStatus;
-import com.aitour.domain.TripRequest;
-import com.aitour.infrastructure.persistence.TripPlanMapper;
-import com.aitour.infrastructure.persistence.TripRequestMapper;
+import com.aitour.common.entity.TripRequest;
+import com.aitour.mapper.TripPlanMapper;
+import com.aitour.mapper.TripRequestMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -368,14 +368,14 @@ public class TripDraftService {
 
 **Files:**
 
-- Create: `backend/src/main/java/com/aitour/application/TripQueryService.java`
-- Create: `backend/src/main/java/com/aitour/api/TripController.java`
-- Create: `backend/src/test/java/com/aitour/api/TripControllerTest.java`
+- Create: `backend/src/main/java/com/aitour/service/TripQueryService.java`
+- Create: `backend/src/main/java/com/aitour/controller/TripController.java`
+- Create: `backend/src/test/java/com/aitour/controller/TripControllerTest.java`
 
 - [ ] **Step 1: 写接口测试**
 
 ```java
-package com.aitour.api;
+package com.aitour.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -441,12 +441,12 @@ class TripControllerTest {
 实现要点：
 
 ```java
-package com.aitour.application;
+package com.aitour.service;
 
-import com.aitour.api.dto.TripDtos;
+import com.aitour.common.dto.TripDtos;
 import com.aitour.domain.TripPlan;
-import com.aitour.infrastructure.exception.ApiException;
-import com.aitour.infrastructure.persistence.TripPlanMapper;
+import com.aitour.common.exception.ApiException;
+import com.aitour.mapper.TripPlanMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -485,11 +485,11 @@ public class TripQueryService {
 - [ ] **Step 3: 创建 Controller**
 
 ```java
-package com.aitour.api;
+package com.aitour.controller;
 
-import com.aitour.api.dto.TripDtos;
-import com.aitour.application.TripDraftService;
-import com.aitour.application.TripQueryService;
+import com.aitour.common.dto.TripDtos;
+import com.aitour.service.TripDraftService;
+import com.aitour.service.TripQueryService;
 import com.aitour.infrastructure.security.CurrentUser;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

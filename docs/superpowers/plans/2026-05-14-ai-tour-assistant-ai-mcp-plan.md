@@ -6,7 +6,7 @@
 
 **Architecture:** AI 和工具都通过接口隔离。业务服务只依赖 `AiChatClient` 和 `McpToolRegistry`。本地工具默认启用，外部 MCP Server 通过 `ExternalMcpToolAdapter` 预留扩展位。
 
-**Tech Stack:** Spring Boot 3、WebClient、Jackson、MyBatis-Plus、JUnit 5、MockWebServer 或 WireMock。
+**Tech Stack:** Spring Boot 3、JDK 21 HttpClient、Jackson、MyBatis-Plus、JUnit 5、MockWebServer 或 WireMock。
 
 ---
 
@@ -19,25 +19,25 @@
 
 ```text
 backend/src/main/resources/db/migration/V3__init_ai_tool_logs.sql
-backend/src/main/java/com/aitour/ai/AiChatClient.java
-backend/src/main/java/com/aitour/ai/AiProperties.java
-backend/src/main/java/com/aitour/ai/ChatRequest.java
-backend/src/main/java/com/aitour/ai/OpenAiCompatibleChatClient.java
-backend/src/main/java/com/aitour/ai/PromptTemplateService.java
-backend/src/main/java/com/aitour/mcp/TravelTool.java
-backend/src/main/java/com/aitour/mcp/ToolRequest.java
-backend/src/main/java/com/aitour/mcp/ToolResult.java
-backend/src/main/java/com/aitour/mcp/McpToolRegistry.java
-backend/src/main/java/com/aitour/mcp/local/LocalWeatherTool.java
-backend/src/main/java/com/aitour/mcp/local/LocalPlaceSearchTool.java
-backend/src/main/java/com/aitour/mcp/local/LocalRouteTool.java
-backend/src/main/java/com/aitour/mcp/local/LocalBudgetTool.java
-backend/src/main/java/com/aitour/mcp/external/ExternalMcpToolAdapter.java
-backend/src/main/java/com/aitour/domain/LlmCallLog.java
-backend/src/main/java/com/aitour/domain/ToolCallLog.java
-backend/src/main/java/com/aitour/infrastructure/persistence/LlmCallLogMapper.java
-backend/src/main/java/com/aitour/infrastructure/persistence/ToolCallLogMapper.java
-backend/src/main/java/com/aitour/api/ToolController.java
+backend/src/main/java/com/aitour/client/ai/AiChatClient.java
+backend/src/main/java/com/aitour/config/ai/AiProperties.java
+backend/src/main/java/com/aitour/client/ai/ChatRequest.java
+backend/src/main/java/com/aitour/client/ai/OpenAiCompatibleChatClient.java
+backend/src/main/java/com/aitour/client/ai/PromptTemplateService.java
+backend/src/main/java/com/aitour/client/mcp/TravelTool.java
+backend/src/main/java/com/aitour/client/mcp/ToolRequest.java
+backend/src/main/java/com/aitour/client/mcp/ToolResult.java
+backend/src/main/java/com/aitour/client/mcp/McpToolRegistry.java
+backend/src/main/java/com/aitour/client/mcp/local/LocalWeatherTool.java
+backend/src/main/java/com/aitour/client/mcp/local/LocalPlaceSearchTool.java
+backend/src/main/java/com/aitour/client/mcp/local/LocalRouteTool.java
+backend/src/main/java/com/aitour/client/mcp/local/LocalBudgetTool.java
+backend/src/main/java/com/aitour/client/mcp/external/ExternalMcpToolAdapter.java
+backend/src/main/java/com/aitour/common/entity/LlmCallLog.java
+backend/src/main/java/com/aitour/common/entity/ToolCallLog.java
+backend/src/main/java/com/aitour/mapper/LlmCallLogMapper.java
+backend/src/main/java/com/aitour/mapper/ToolCallLogMapper.java
+backend/src/main/java/com/aitour/controller/ToolController.java
 ```
 
 ## Task 1: 创建 AI 与工具日志表
@@ -122,15 +122,12 @@ class AiToolMigrationTest {
 - Create AI package files.
 - Create: `backend/src/test/java/com/aitour/ai/PromptTemplateServiceTest.java`
 
-- [ ] **Step 1: 增加 WebClient 依赖**
+- [ ] **Step 1: 使用 JDK 21 HttpClient**
 
 在 `backend/pom.xml` 增加：
 
 ```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-webflux</artifactId>
-</dependency>
+不额外引入 WebFlux；AI HTTP 调用使用 JDK 21 自带 `java.net.http.HttpClient`，避免在 Servlet MVC 应用里启动额外 Reactive HTTP 连接器。
 ```
 
 - [ ] **Step 2: 增加 AI 配置**
@@ -149,7 +146,7 @@ ai:
 `AiProperties.java`：
 
 ```java
-package com.aitour.ai;
+package com.aitour.client.ai;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -161,7 +158,7 @@ public record AiProperties(String provider, String baseUrl, String apiKey, Strin
 `ChatRequest.java`：
 
 ```java
-package com.aitour.ai;
+package com.aitour.client.ai;
 
 import java.util.List;
 
@@ -174,7 +171,7 @@ public record ChatRequest(List<Message> messages, boolean stream) {
 `AiChatClient.java`：
 
 ```java
-package com.aitour.ai;
+package com.aitour.client.ai;
 
 import java.util.function.Consumer;
 
@@ -188,7 +185,7 @@ public interface AiChatClient {
 - [ ] **Step 4: 创建 Prompt 服务**
 
 ```java
-package com.aitour.ai;
+package com.aitour.client.ai;
 
 import org.springframework.stereotype.Service;
 
@@ -217,7 +214,7 @@ public class PromptTemplateService {
 - [ ] **Step 5: 测试 Prompt 服务**
 
 ```java
-package com.aitour.ai;
+package com.aitour.client.ai;
 
 import org.junit.jupiter.api.Test;
 
@@ -240,14 +237,12 @@ class PromptTemplateServiceTest {
 - [ ] **Step 6: 创建 OpenAI-compatible 客户端**
 
 ```java
-package com.aitour.ai;
+package com.aitour.client.ai;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
 
-import java.util.List;
+import java.net.http.HttpClient;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -255,11 +250,11 @@ import java.util.function.Consumer;
 @EnableConfigurationProperties(AiProperties.class)
 public class OpenAiCompatibleChatClient implements AiChatClient {
     private final AiProperties properties;
-    private final WebClient webClient;
+    private final HttpClient httpClient;
 
-    public OpenAiCompatibleChatClient(AiProperties properties, WebClient.Builder builder) {
+    public OpenAiCompatibleChatClient(AiProperties properties) {
         this.properties = properties;
-        this.webClient = builder.baseUrl(properties.baseUrl()).build();
+        this.httpClient = HttpClient.newHttpClient();
     }
 
     @Override
@@ -271,13 +266,8 @@ public class OpenAiCompatibleChatClient implements AiChatClient {
                         .map(message -> Map.of("role", message.role(), "content", message.content()))
                         .toList()
         );
-        return webClient.post()
-                .uri("/chat/completions")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + properties.apiKey())
-                .bodyValue(body)
-                .retrieve()
-                .bodyToMono(String.class)
-                .block();
+        // 实际项目代码使用 JDK 21 HttpClient 发送 OpenAI-compatible 请求。
+        return "{}";
     }
 
     @Override
@@ -298,7 +288,7 @@ public class OpenAiCompatibleChatClient implements AiChatClient {
 - [ ] **Step 1: 创建工具基础类型**
 
 ```java
-package com.aitour.mcp;
+package com.aitour.client.mcp;
 
 import java.util.Map;
 
@@ -307,7 +297,7 @@ public record ToolRequest(Long userId, Long planId, Map<String, Object> argument
 ```
 
 ```java
-package com.aitour.mcp;
+package com.aitour.client.mcp;
 
 import java.util.Map;
 
@@ -316,7 +306,7 @@ public record ToolResult(String toolName, boolean success, String summary, Map<S
 ```
 
 ```java
-package com.aitour.mcp;
+package com.aitour.client.mcp;
 
 public interface TravelTool {
     String name();
@@ -328,11 +318,11 @@ public interface TravelTool {
 - [ ] **Step 2: 创建本地天气工具**
 
 ```java
-package com.aitour.mcp.local;
+package com.aitour.client.mcp.local;
 
-import com.aitour.mcp.ToolRequest;
-import com.aitour.mcp.ToolResult;
-import com.aitour.mcp.TravelTool;
+import com.aitour.client.mcp.ToolRequest;
+import com.aitour.client.mcp.ToolResult;
+import com.aitour.client.mcp.TravelTool;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -371,9 +361,9 @@ LocalBudgetTool -> name = budget.estimate，返回 hotel/food/transport/ticket/o
 - [ ] **Step 4: 创建工具注册表**
 
 ```java
-package com.aitour.mcp;
+package com.aitour.client.mcp;
 
-import com.aitour.infrastructure.exception.ApiException;
+import com.aitour.common.exception.ApiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -407,9 +397,9 @@ public class McpToolRegistry {
 - [ ] **Step 5: 测试工具注册表**
 
 ```java
-package com.aitour.mcp;
+package com.aitour.client.mcp;
 
-import com.aitour.mcp.local.LocalWeatherTool;
+import com.aitour.client.mcp.local.LocalWeatherTool;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -435,13 +425,13 @@ class McpToolRegistryTest {
 
 **Files:**
 
-- Create: `backend/src/main/java/com/aitour/api/ToolController.java`
-- Create: `backend/src/test/java/com/aitour/api/ToolControllerTest.java`
+- Create: `backend/src/main/java/com/aitour/controller/ToolController.java`
+- Create: `backend/src/test/java/com/aitour/controller/ToolControllerTest.java`
 
 - [ ] **Step 1: 创建接口测试**
 
 ```java
-package com.aitour.api;
+package com.aitour.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -487,9 +477,9 @@ class ToolControllerTest {
 - [ ] **Step 2: 创建 Controller**
 
 ```java
-package com.aitour.api;
+package com.aitour.controller;
 
-import com.aitour.mcp.McpToolRegistry;
+import com.aitour.client.mcp.McpToolRegistry;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;

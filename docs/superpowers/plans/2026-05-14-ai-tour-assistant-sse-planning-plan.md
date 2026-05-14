@@ -19,31 +19,31 @@
 ## 文件结构规划
 
 ```text
-backend/src/main/java/com/aitour/api/dto/SseDtos.java
-backend/src/main/java/com/aitour/application/StreamingEventPublisher.java
-backend/src/main/java/com/aitour/application/TripPlanningService.java
-backend/src/main/java/com/aitour/application/TripAdjustmentService.java
+backend/src/main/java/com/aitour/common/dto/SseDtos.java
+backend/src/main/java/com/aitour/service/StreamingEventPublisher.java
+backend/src/main/java/com/aitour/service/TripPlanningService.java
+backend/src/main/java/com/aitour/service/TripAdjustmentService.java
 backend/src/main/java/com/aitour/planner/AttractionRanker.java
 backend/src/main/java/com/aitour/planner/DaySchedulePlanner.java
 backend/src/main/java/com/aitour/planner/BudgetEstimator.java
 backend/src/main/java/com/aitour/planner/WeatherRiskAnalyzer.java
-backend/src/main/java/com/aitour/api/TripController.java
-backend/src/test/java/com/aitour/application/StreamingEventPublisherTest.java
-backend/src/test/java/com/aitour/api/TripStreamControllerTest.java
+backend/src/main/java/com/aitour/controller/TripController.java
+backend/src/test/java/com/aitour/service/StreamingEventPublisherTest.java
+backend/src/test/java/com/aitour/controller/TripStreamControllerTest.java
 ```
 
 ## Task 1: 定义 SSE 事件 DTO 和发布器
 
 **Files:**
 
-- Create: `backend/src/main/java/com/aitour/api/dto/SseDtos.java`
-- Create: `backend/src/main/java/com/aitour/application/StreamingEventPublisher.java`
-- Create: `backend/src/test/java/com/aitour/application/StreamingEventPublisherTest.java`
+- Create: `backend/src/main/java/com/aitour/common/dto/SseDtos.java`
+- Create: `backend/src/main/java/com/aitour/service/StreamingEventPublisher.java`
+- Create: `backend/src/test/java/com/aitour/service/StreamingEventPublisherTest.java`
 
 - [ ] **Step 1: 创建 SSE DTO**
 
 ```java
-package com.aitour.api.dto;
+package com.aitour.common.dto;
 
 import java.util.Map;
 
@@ -74,7 +74,7 @@ public final class SseDtos {
 - [ ] **Step 2: 创建事件发布器**
 
 ```java
-package com.aitour.application;
+package com.aitour.service;
 
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -105,9 +105,9 @@ public class StreamingEventPublisher {
 - [ ] **Step 3: 测试发布器可创建事件**
 
 ```java
-package com.aitour.application;
+package com.aitour.service;
 
-import com.aitour.api.dto.SseDtos;
+import com.aitour.common.dto.SseDtos;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -285,18 +285,18 @@ class DaySchedulePlannerTest {
 
 **Files:**
 
-- Create: `backend/src/main/java/com/aitour/application/TripPlanningService.java`
+- Create: `backend/src/main/java/com/aitour/service/TripPlanningService.java`
 - Modify: existing mappers and DTOs if needed.
-- Create: `backend/src/test/java/com/aitour/application/TripPlanningServiceTest.java`
+- Create: `backend/src/test/java/com/aitour/service/TripPlanningServiceTest.java`
 
 - [ ] **Step 1: 创建服务测试**
 
 测试目标：给定请求后服务能创建 plan，发送 completed 事件，并保存行程状态。
 
 ```java
-package com.aitour.application;
+package com.aitour.service;
 
-import com.aitour.api.dto.TripDtos;
+import com.aitour.common.dto.TripDtos;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -330,16 +330,16 @@ class TripPlanningServiceTest {
 实现主流程：
 
 ```java
-package com.aitour.application;
+package com.aitour.service;
 
-import com.aitour.ai.AiChatClient;
-import com.aitour.ai.ChatRequest;
-import com.aitour.api.dto.SseDtos;
-import com.aitour.api.dto.TripDtos;
+import com.aitour.client.ai.AiChatClient;
+import com.aitour.client.ai.ChatRequest;
+import com.aitour.common.dto.SseDtos;
+import com.aitour.common.dto.TripDtos;
 import com.aitour.domain.TripPlanStatus;
-import com.aitour.mcp.McpToolRegistry;
-import com.aitour.mcp.ToolRequest;
-import com.aitour.mcp.ToolResult;
+import com.aitour.client.mcp.McpToolRegistry;
+import com.aitour.client.mcp.ToolRequest;
+import com.aitour.client.mcp.ToolResult;
 import com.aitour.planner.AttractionRanker;
 import com.aitour.planner.BudgetEstimator;
 import com.aitour.planner.DaySchedulePlanner;
@@ -419,13 +419,13 @@ public class TripPlanningService {
 
 **Files:**
 
-- Modify: `backend/src/main/java/com/aitour/api/TripController.java`
-- Create: `backend/src/test/java/com/aitour/api/TripStreamControllerTest.java`
+- Modify: `backend/src/main/java/com/aitour/controller/TripController.java`
+- Create: `backend/src/test/java/com/aitour/controller/TripStreamControllerTest.java`
 
 - [ ] **Step 1: 写流式接口测试**
 
 ```java
-package com.aitour.api;
+package com.aitour.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -513,8 +513,8 @@ BUILD SUCCESS
 
 **Files:**
 
-- Create: `backend/src/main/java/com/aitour/application/TripAdjustmentService.java`
-- Modify: `backend/src/main/java/com/aitour/api/TripController.java`
+- Create: `backend/src/main/java/com/aitour/service/TripAdjustmentService.java`
+- Modify: `backend/src/main/java/com/aitour/controller/TripController.java`
 
 - [ ] **Step 1: 创建调整请求 DTO**
 
@@ -528,12 +528,12 @@ public record AdjustTripRequest(String instruction) {
 - [ ] **Step 2: 创建调整服务**
 
 ```java
-package com.aitour.application;
+package com.aitour.service;
 
-import com.aitour.ai.AiChatClient;
-import com.aitour.ai.ChatRequest;
-import com.aitour.api.dto.SseDtos;
-import com.aitour.api.dto.TripDtos;
+import com.aitour.client.ai.AiChatClient;
+import com.aitour.client.ai.ChatRequest;
+import com.aitour.common.dto.SseDtos;
+import com.aitour.common.dto.TripDtos;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 

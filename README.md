@@ -6,10 +6,20 @@
 
 ## 技术栈
 
-- Backend: Java 17+, Spring Boot 3, MyBatis-Plus, Flyway, MySQL, Redis
+- Backend: JDK 21, Spring Boot 3, embedded Tomcat, Druid, MyBatis-Plus, Flyway, MySQL, Redis
 - Frontend: Vue 3, Vite, Element Plus, Pinia
 - AI: OpenAI-compatible API
 - Tools: 本地 MCP 风格工具 + 外部 MCP Server 适配
+
+## 后端结构约定
+
+- `controller`: 接收请求、参数校验、返回结果
+- `service`: 编排业务流程
+- `domain`: 核心业务模型和业务规则
+- `mapper`: MyBatis-Plus 数据访问层
+- `client`: 调用第三方服务，例如天气、地图、大模型和 MCP 工具适配
+- `config`: 配置类
+- `common`: 通用工具、异常、响应封装、DTO、Entity、VO
 
 ## 本地中间件
 
@@ -100,6 +110,15 @@ curl http://localhost:8080/api/trips `
 
 ```powershell
 curl http://localhost:8080/api/trips/<planId> `
+  -H "Authorization: Bearer <accessToken>"
+```
+
+## 工具状态接口
+
+查询当前可用的本地 MCP 风格工具：
+
+```powershell
+curl http://localhost:8080/api/tools/status `
   -H "Authorization: Bearer <accessToken>"
 ```
 
