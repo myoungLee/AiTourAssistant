@@ -32,7 +32,7 @@
 - [ ] Task 1: 前端适配统一 `Result<T>` 和字段参数。下一步优先执行。
 - [ ] Task 2: 完善前端核心页面。
 - [ ] Task 3: Redis 登录态与缓存使用落地。
-- [x] Task 4: Spring AI 与 MCP 工具配置化增强中的 Spring AI 接入部分。已使用 `spring-ai-starter-model-openai`，注入 `ChatModel` 并通过 `ChatClient.builder(chatModel)` 创建客户端；MCP 外部 Server 切换增强仍待执行。
+- [ ] Task 4: MCP 工具模式配置化增强。Spring AI 接入部分已完成，剩余工作是本地/外部 MCP 模式切换。
 - [ ] Task 5: 行程生成质量和持久化细化。
 - [ ] Task 6: Swagger 和接口测试文档补齐。
 - [ ] Task 7: 本地联调和交付清单。
@@ -43,6 +43,7 @@
 
 - 后端基础工程：JDK 21、Spring Boot、内嵌 Tomcat、Druid、Flyway、MyBatis-Plus。
 - 本地中间件配置：MySQL 使用 `root/young`，Redis 使用密码 `young`。
+- 本机默认启动方式：直接使用 `backend/src/main/resources/application.yml`，不再以 dev profile 作为默认入口。
 - 认证与用户资料：注册、登录、当前用户、用户偏好更新。
 - 行程持久化：行程草稿、历史列表、详情查询、行程生成结果相关表。
 - AI 与 MCP：Spring AI OpenAI ChatClient，本地 MCP 风格天气、景点、路线、预算工具，外部 MCP 适配入口。
@@ -50,12 +51,14 @@
 - Swagger：通过 springdoc-openapi 生成接口测试文档。
 - 接口契约：普通 REST 接口统一返回 `Result<T>`，业务数据放在 `data` 字段。
 - 分层结构：`service` 放接口，`service.impl` 放实现。
+- 前端现状：仅有基础首页、基础路由和 `http.ts` 骨架，尚未适配 `Result<T>`、认证态、业务 API 模块和业务页面。
 
 ## 全局执行规则
 
 - 每个阶段完成后运行对应测试、构建或冒烟验证。
 - 提交前必须运行 `git diff --check`、`git status --short --ignored` 和敏感信息扫描。
 - 不提交 `.superpowers/`、日志、`target/`、`node_modules/`、`dist/`、密钥或临时文件。
+- 后端本机运行、Swagger 验证和本地联调默认基于 `application.yml`；只有模型 Key 通过 `AI_API_KEY` 环境变量注入。
 - 所有新增或修改的 Java/TypeScript/Vue/Markdown 文件顶部保留 `@author myoung` 注释。
 - 每个类、方法和关键流程添加有效注释。
 - 提交消息和推送说明使用简体中文。
@@ -156,6 +159,7 @@ Expected:
 - Create: `frontend/src/api/auth.ts`
 - Create: `frontend/src/api/trips.ts`
 - Create: `frontend/src/api/tools.ts`
+- Create: `frontend/src/api/stream.ts`
 - Modify: `frontend/src/App.test.ts`
 
 - [ ] **Step 1: 定义前端统一响应类型**
@@ -230,7 +234,18 @@ function formParams(values: Record<string, string | number | undefined | null>) 
 }
 ```
 
-- [ ] **Step 4: 运行前端测试和构建**
+- [ ] **Step 4: 抽出流式接口请求封装**
+
+验收标准：
+
+```text
+新增 frontend/src/api/stream.ts。
+流式 POST 请求统一使用 fetch。
+请求头包含 Authorization 和 Accept: text/event-stream。
+请求体使用 URLSearchParams，不回退为 JSON RequestBody。
+```
+
+- [ ] **Step 5: 运行前端测试和构建**
 
 Run:
 
@@ -246,7 +261,7 @@ Expected:
 测试通过，生产构建成功生成 dist。
 ```
 
-- [ ] **Step 5: 提交并推送**
+- [ ] **Step 6: 提交并推送**
 
 Commit:
 
@@ -258,9 +273,11 @@ git commit -m "feat: 适配前端统一响应结构"
 
 **Files:**
 
+- Create: `frontend/src/api/stream.ts`
 - Create: `frontend/src/stores/auth.ts`
 - Create: `frontend/src/stores/trip.ts`
 - Modify: `frontend/src/router/index.ts`
+- Create: `frontend/src/layouts/AppLayout.vue`
 - Create: `frontend/src/views/LoginView.vue`
 - Create: `frontend/src/views/RegisterView.vue`
 - Create: `frontend/src/views/TripPlannerView.vue`
@@ -326,9 +343,13 @@ git commit -m "feat: 完善前端核心页面"
 
 **Files:**
 
+- Modify: `backend/src/main/java/com/aitour/controller/AuthController.java`
+- Modify: `backend/src/main/java/com/aitour/service/AuthService.java`
 - Modify: `backend/src/main/java/com/aitour/service/impl/AuthServiceImpl.java`
+- Modify: `backend/src/main/java/com/aitour/config/security/JwtTokenService.java`
 - Modify: `backend/src/main/java/com/aitour/config/security/JwtAuthenticationFilter.java`
 - Modify: `backend/src/main/java/com/aitour/service/impl/UserProfileServiceImpl.java`
+- Modify: `backend/src/test/java/com/aitour/controller/AuthControllerTest.java`
 - Create: `backend/src/test/java/com/aitour/service/AuthRedisTokenTest.java`
 
 - [ ] **Step 1: 刷新令牌写入 Redis**
@@ -337,6 +358,7 @@ git commit -m "feat: 完善前端核心页面"
 
 ```text
 登录或注册成功后，refreshToken 与 userId 关系写入 Redis，并设置过期时间。
+沿用当前 AuthResponse 返回 refreshToken 的接口契约，不新增完整 RequestBody。
 ```
 
 - [ ] **Step 2: 支持退出登录黑名单**
@@ -344,6 +366,8 @@ git commit -m "feat: 完善前端核心页面"
 验收标准：
 
 ```text
+新增 POST /api/auth/logout。
+Controller 继续使用字段参数和 Result<T>。
 新增退出登录接口后，accessToken 剩余有效期内进入 Redis 黑名单。
 JwtAuthenticationFilter 识别黑名单 token 并拒绝访问。
 ```
@@ -355,6 +379,7 @@ JwtAuthenticationFilter 识别黑名单 token 并拒绝访问。
 ```text
 读取当前用户资料时可从 Redis 命中。
 更新资料后删除或刷新缓存。
+缓存键命名和失效逻辑需要明确，不无边界扩散用户敏感数据。
 ```
 
 - [ ] **Step 4: 运行后端测试**
@@ -377,70 +402,22 @@ BUILD SUCCESS
 Commit:
 
 ```powershell
-git commit -m "feat: 落地 Redis 登录态和用户缓存"
+git commit -m "feat: 落地 Redis 登录态与退出登录"
 ```
 
-## Task 4: Spring AI 与 MCP 工具配置化增强
+## Task 4: MCP 工具模式配置化增强
 
-> 状态：Spring AI 接入部分已完成；MCP 外部 Server 切换增强仍待执行。
+> 状态：Spring AI 接入部分已完成。本任务只处理剩余的 MCP 本地/外部模式切换，不再重复改模型接入。
 
 **Files:**
 
-- Modify: `backend/pom.xml`
-- Modify: `backend/src/main/java/com/aitour/client/ai/SpringAiChatClient.java`
+- Create: `backend/src/main/java/com/aitour/config/mcp/McpProperties.java`
 - Modify: `backend/src/main/java/com/aitour/client/mcp/McpToolRegistry.java`
 - Modify: `backend/src/main/java/com/aitour/client/mcp/external/ExternalMcpToolAdapter.java`
 - Modify: `backend/src/main/resources/application.yml`
 - Modify: `backend/src/test/java/com/aitour/client/mcp/McpToolRegistryTest.java`
 
-- [x] **Step 1: 使用 Spring AI 官方 OpenAI Starter**
-
-状态：已完成。
-
-依赖约定：
-
-```xml
-<dependency>
-    <groupId>org.springframework.ai</groupId>
-    <artifactId>spring-ai-starter-model-openai</artifactId>
-</dependency>
-```
-
-验收标准：
-
-```text
-AI 客户端注入 Spring AI 自动配置的 ChatModel，并通过 ChatClient.builder(chatModel) 创建客户端。
-不手写 java.net.http.HttpClient。
-不手动拼接 /chat/completions 请求。
-```
-
-- [x] **Step 2: 明确 Spring AI 官方配置**
-
-状态：已完成。
-
-配置约定：
-
-```yaml
-spring:
-  ai:
-    openai:
-      base-url: https://www.micuapi.ai
-      api-key: ${AI_API_KEY:}
-      chat:
-        completions-path: /v1/chat/completions
-        options:
-          model: gpt-5.4
-          reasoning-effort: high
-```
-
-验收标准：
-
-```text
-只有 api-key 从环境变量读取。
-base-url、model、reasoning-effort 写在配置文件。
-```
-
-- [ ] **Step 3: 明确本地和外部 MCP 模式**
+- [ ] **Step 1: 明确本地和外部 MCP 模式**
 
 配置约定：
 
@@ -460,18 +437,17 @@ mcp.mode=external 且配置 base-url 后，优先调用外部 MCP Server。
 外部调用失败时返回可追踪错误，不吞异常。
 ```
 
-- [x] **Step 4: 保持 AI Key 只从环境变量读取**
-
-状态：已完成。
+- [ ] **Step 2: 保持 Spring AI 既有配置不回退**
 
 验收标准：
 
 ```text
+不修改当前 spring.ai.openai.* 的官方配置结构。
 application.yml 中 spring.ai.openai.api-key 保持 ${AI_API_KEY:}。
-不把真实 Key 写入配置文件、测试文件、README 或计划文档。
+不引入手写 HttpClient、OpenAiCompatibleChatClient 或 AiProperties 回退实现。
 ```
 
-- [ ] **Step 5: 运行后端测试**
+- [ ] **Step 3: 运行后端测试**
 
 Run:
 
@@ -486,12 +462,12 @@ Expected:
 BUILD SUCCESS
 ```
 
-- [ ] **Step 6: 提交并推送**
+- [ ] **Step 4: 提交并推送**
 
 Commit:
 
 ```powershell
-git commit -m "feat: 使用 Spring AI 接入模型"
+git commit -m "feat: 支持 MCP 本地与外部模式切换"
 ```
 
 ## Task 5: 行程生成质量和持久化细化
@@ -550,12 +526,14 @@ git commit -m "feat: 优化行程生成质量和调用日志"
 
 **Files:**
 
+- Modify: `backend/src/main/java/com/aitour/config/OpenApiConfig.java`
 - Modify: `backend/src/main/java/com/aitour/controller/*.java`
 - Modify: `backend/src/main/java/com/aitour/common/dto/*.java`
 - Modify: `backend/src/main/java/com/aitour/common/Result.java`
+- Modify: `backend/src/test/java/com/aitour/controller/SwaggerDocumentationTest.java`
 - Modify: `README.md`
 
-- [ ] **Step 1: Controller 参数补齐 Swagger 注解**
+- [ ] **Step 1: 基于现有注解补齐缺口**
 
 验收标准：
 
@@ -563,6 +541,7 @@ git commit -m "feat: 优化行程生成质量和调用日志"
 每个公开接口有 @Operation。
 每个字段参数有 @Parameter。
 接口错误状态有 @ApiResponse。
+DTO 和统一 Result<T> 在文档中有清晰 schema 展示。
 Swagger UI 中能看到字段参数，不再要求 JSON RequestBody。
 ```
 
@@ -572,7 +551,7 @@ Run:
 
 ```powershell
 cd backend
-mvn.cmd -o -Dtest=SwaggerDocumentationTest test
+mvn.cmd -Dtest=SwaggerDocumentationTest test
 ```
 
 Expected:
@@ -605,8 +584,10 @@ git commit -m "docs: 完善 Swagger 接口说明"
 MySQL 连接
 Redis 连接
 后端 mvn test
+后端默认 application.yml 启动
 Swagger UI
 注册登录
+退出登录
 用户资料
 行程草稿
 SSE 流式生成
@@ -623,7 +604,8 @@ Run:
 ```powershell
 docker compose config
 cd backend
-mvn.cmd -o test
+mvn.cmd test
+mvn.cmd spring-boot:run
 cd ..\frontend
 npm.cmd run test
 npm.cmd run build
