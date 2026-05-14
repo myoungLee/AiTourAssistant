@@ -388,7 +388,7 @@ git commit -m "feat: 落地 Redis 登录态和用户缓存"
 验收标准：
 
 ```text
-AI 客户端注入 ChatClient.Builder。
+AI 客户端注入 Spring AI 自动配置的 ChatModel，并通过 ChatClient.builder(chatModel) 创建客户端。
 不手写 java.net.http.HttpClient。
 不手动拼接 /chat/completions 请求。
 ```

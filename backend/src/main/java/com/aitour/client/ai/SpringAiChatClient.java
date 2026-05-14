@@ -8,6 +8,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -24,10 +25,10 @@ public class SpringAiChatClient implements AiChatClient {
     private final ChatClient chatClient;
 
     /**
-     * 使用 Spring AI 自动配置的 ChatClient.Builder 创建客户端。
+     * 使用 Spring AI 自动配置的 ChatModel 创建 ChatClient。
      */
-    public SpringAiChatClient(ChatClient.Builder chatClientBuilder) {
-        this.chatClient = chatClientBuilder.build();
+    public SpringAiChatClient(ChatModel chatModel) {
+        this.chatClient = ChatClient.builder(chatModel).build();
     }
 
     /**
