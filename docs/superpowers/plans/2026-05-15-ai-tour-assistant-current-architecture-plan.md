@@ -21,12 +21,25 @@
 - Service 根包直接放实现类。
 - 前端直接读取 Axios 的原始 `data` 作为业务对象。
 - 部分配置项通过环境变量读取，而当前约定是只有模型 Key 从环境变量读取。
+- AI 接入使用 JDK `HttpClient`、`OpenAiCompatibleChatClient` 或 `AiProperties`。
+- 通过 `application-dev.yml` 和 dev profile 作为本机默认启动入口。
 
-后续执行时，以本文档和根目录 `AGENTS.md` 为准。
+上述历史计划已经全部加上“停止按此执行”说明。后续执行时，以本文档和根目录 `AGENTS.md` 为准。
+
+## 阶段状态
+
+- [x] Task 0: 收尾当前架构调整。已完成 `Result<T>`、`service.impl`、Controller 字段参数、Spring AI 接入和主计划更新，并已推送。
+- [ ] Task 1: 前端适配统一 `Result<T>` 和字段参数。下一步优先执行。
+- [ ] Task 2: 完善前端核心页面。
+- [ ] Task 3: Redis 登录态与缓存使用落地。
+- [x] Task 4: Spring AI 与 MCP 工具配置化增强中的 Spring AI 接入部分。已使用 `spring-ai-starter-model-openai`，注入 `ChatModel` 并通过 `ChatClient.builder(chatModel)` 创建客户端；MCP 外部 Server 切换增强仍待执行。
+- [ ] Task 5: 行程生成质量和持久化细化。
+- [ ] Task 6: Swagger 和接口测试文档补齐。
+- [ ] Task 7: 本地联调和交付清单。
 
 ## 当前基线
 
-已经完成或正在收尾的内容：
+已经完成的内容：
 
 - 后端基础工程：JDK 21、Spring Boot、内嵌 Tomcat、Druid、Flyway、MyBatis-Plus。
 - 本地中间件配置：MySQL 使用 `root/young`，Redis 使用密码 `young`。
@@ -49,6 +62,8 @@
 
 ## Task 0: 收尾当前架构调整
 
+> 状态：已完成并推送。保留本任务作为架构收口验收记录，后续执行从 Task 1 开始。
+
 **Files:**
 
 - Modify: `AGENTS.md`
@@ -60,7 +75,7 @@
 - Modify: `backend/src/test/java/com/aitour/controller/*.java`
 - Modify: `backend/src/test/java/com/aitour/service/*.java`
 
-- [ ] **Step 1: 确认 Controller 没有 `@RequestBody`**
+- [x] **Step 1: 确认 Controller 没有 `@RequestBody`**
 
 Run:
 
@@ -74,7 +89,7 @@ Expected:
 无输出，命令退出码可以是 1。
 ```
 
-- [ ] **Step 2: 确认普通接口统一返回 `Result<T>`**
+- [x] **Step 2: 确认普通接口统一返回 `Result<T>`**
 
 重点检查：
 
@@ -94,7 +109,7 @@ SSE 方法仍返回 SseEmitter。
 Controller 参数使用 @RequestParam 或 @PathVariable。
 ```
 
-- [ ] **Step 3: 运行后端测试**
+- [x] **Step 3: 运行后端测试**
 
 Run:
 
@@ -110,7 +125,7 @@ BUILD SUCCESS
 Tests run: 19, Failures: 0, Errors: 0, Skipped: 0
 ```
 
-- [ ] **Step 4: 提交并推送**
+- [x] **Step 4: 提交并推送**
 
 Run:
 
@@ -131,6 +146,8 @@ Expected:
 ```
 
 ## Task 1: 前端适配统一 `Result<T>` 和字段参数
+
+> 状态：下一步优先执行。
 
 **Files:**
 
@@ -365,6 +382,8 @@ git commit -m "feat: 落地 Redis 登录态和用户缓存"
 
 ## Task 4: Spring AI 与 MCP 工具配置化增强
 
+> 状态：Spring AI 接入部分已完成；MCP 外部 Server 切换增强仍待执行。
+
 **Files:**
 
 - Modify: `backend/pom.xml`
@@ -374,7 +393,9 @@ git commit -m "feat: 落地 Redis 登录态和用户缓存"
 - Modify: `backend/src/main/resources/application.yml`
 - Modify: `backend/src/test/java/com/aitour/client/mcp/McpToolRegistryTest.java`
 
-- [ ] **Step 1: 使用 Spring AI 官方 OpenAI Starter**
+- [x] **Step 1: 使用 Spring AI 官方 OpenAI Starter**
+
+状态：已完成。
 
 依赖约定：
 
@@ -393,7 +414,9 @@ AI 客户端注入 Spring AI 自动配置的 ChatModel，并通过 ChatClient.bu
 不手动拼接 /chat/completions 请求。
 ```
 
-- [ ] **Step 2: 明确 Spring AI 官方配置**
+- [x] **Step 2: 明确 Spring AI 官方配置**
+
+状态：已完成。
 
 配置约定：
 
@@ -437,7 +460,9 @@ mcp.mode=external 且配置 base-url 后，优先调用外部 MCP Server。
 外部调用失败时返回可追踪错误，不吞异常。
 ```
 
-- [ ] **Step 4: 保持 AI Key 只从环境变量读取**
+- [x] **Step 4: 保持 AI Key 只从环境变量读取**
+
+状态：已完成。
 
 验收标准：
 

@@ -1,4 +1,10 @@
+<!-- @author myoung -->
+
 # AI 旅游助手验证与交付 Implementation Plan
+
+> **历史计划，停止按此执行。** 本文保留为 2026-05-14 阶段拆分记录，代码片段和配置不再作为后续实施依据。当前项目已调整为 Spring Boot + Spring AI + `Result<T>` + `service.impl` 架构，后续执行以 `docs/superpowers/plans/2026-05-15-ai-tour-assistant-current-architecture-plan.md` 和根目录 `AGENTS.md` 为准。
+>
+> 旧内容中可能包含 `.env` 中配置模型地址、模型名、数据库账号或 JWT 密钥等过期约束；当前约定是只有模型 Key 从环境变量读取，其余本机开发配置写入 `application.yml`。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

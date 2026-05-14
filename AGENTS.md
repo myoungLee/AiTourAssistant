@@ -1,3 +1,5 @@
+<!-- @author myoung -->
+
 # 项目协作约束
 
 ## 默认语言
@@ -47,7 +49,8 @@
 
 ## 阶段交付流程
 
-- 后续开发按 `docs/superpowers/plans/` 中的实施计划顺序推进。
+- 后续开发按 `docs/superpowers/plans/2026-05-15-ai-tour-assistant-current-architecture-plan.md` 中的阶段顺序推进。
+- `docs/superpowers/plans/2026-05-14-*.md` 是历史拆分计划，仅作背景参考，文件中的旧代码片段和旧配置不再作为执行依据。
 - 每个阶段完成后必须运行对应测试、构建或冒烟验证。
 - 提交前必须检查 `git diff` 和 `git status`，确认 `.superpowers/`、日志、密钥、临时文件和本地 AI 产物没有进入暂存区。
 - 每个阶段提交前做一次简短 review，说明本阶段修改内容、风险和未完成项。

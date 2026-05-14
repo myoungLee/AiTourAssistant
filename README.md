@@ -53,7 +53,7 @@ docker compose up -d
 
 ```powershell
 cd backend
-mvn.cmd spring-boot:run '-Dspring-boot.run.profiles=dev'
+mvn.cmd spring-boot:run
 ```
 
 健康检查：
@@ -246,6 +246,6 @@ docker compose config
 ```powershell
 $env:AI_API_KEY="your-api-key"
 cd backend
-mvn.cmd spring-boot:run '-Dspring-boot.run.profiles=dev'
+mvn.cmd spring-boot:run
 curl http://localhost:8080/api/health
 ```
