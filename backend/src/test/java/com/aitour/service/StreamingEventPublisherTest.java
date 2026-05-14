@@ -4,6 +4,7 @@
 package com.aitour.service;
 
 import com.aitour.common.dto.SseDtos;
+import com.aitour.service.impl.StreamingEventPublisherImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -21,7 +22,7 @@ class StreamingEventPublisherTest {
      */
     @Test
     void shouldSendEventWithoutThrowingWhenEmitterIsOpen() {
-        StreamingEventPublisher publisher = new StreamingEventPublisher();
+        StreamingEventPublisher publisher = new StreamingEventPublisherImpl();
         SseEmitter emitter = new SseEmitter(1000L);
 
         assertThatCode(() -> publisher.send(

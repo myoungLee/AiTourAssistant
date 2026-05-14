@@ -1,5 +1,7 @@
 # AI 旅游助手 AI 与 MCP 工具抽象 Implementation Plan
 
+> 历史版本说明：本计划保留为 2026-05-14 的拆分设计记录。当前后续执行以 `docs/superpowers/plans/2026-05-15-ai-tour-assistant-current-architecture-plan.md` 为准；AI 接入已改为 Spring AI 官方 OpenAI ChatClient，不再按本文中的 JDK 21 `HttpClient` 或 `OpenAiCompatibleChatClient` 实施。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 实现 OpenAI-compatible AI 客户端抽象、本地 MCP 风格工具、工具注册表和调用日志，为后续流式行程生成提供稳定能力。

@@ -8,13 +8,14 @@
 
 - Backend: JDK 21, Spring Boot 3, embedded Tomcat, Druid, MyBatis-Plus, Flyway, MySQL, Redis
 - Frontend: Vue 3, Vite, Element Plus, Pinia
-- AI: OpenAI-compatible API
+- AI: Spring AI OpenAI ChatClient，使用 OpenAI-compatible 中转地址
 - Tools: 本地 MCP 风格工具 + 外部 MCP Server 适配
 
 ## 后端结构约定
 
 - `controller`: 接收请求、参数校验、返回结果
-- `service`: 编排业务流程
+- `service`: 编排业务流程的接口定义，Controller 和其他上层模块优先依赖接口
+- `service.impl`: `service` 接口的具体实现类，实现类命名统一使用 `XxxServiceImpl`
 - `domain`: 核心业务模型和业务规则
 - `mapper`: MyBatis-Plus 数据访问层
 - `client`: 调用第三方服务，例如天气、地图、大模型和 MCP 工具适配
@@ -35,7 +36,7 @@ Redis: localhost:6379
 Redis 密码: young
 ```
 
-AI 模型请求地址、模型名和推理等级写在配置文件中，只有模型 Key 从环境变量读取：
+AI 接入使用 Spring AI 官方 OpenAI Starter。模型请求地址、模型名和推理等级写在 `spring.ai.openai.*` 配置中，只有模型 Key 从环境变量读取：
 
 ```powershell
 $env:AI_API_KEY="your-api-key"
@@ -81,22 +82,42 @@ http://localhost:8080/v3/api-docs
 Bearer <accessToken>
 ```
 
+## 接口响应约定
+
+普通 REST 接口统一返回 `Result<T>`：
+
+```json
+{
+  "code": 1,
+  "msg": null,
+  "data": {}
+}
+```
+
+- `code`: `1` 表示成功，`0` 和其它数字表示失败。
+- `msg`: 失败时返回错误信息。
+- `data`: 成功时返回业务数据。
+- SSE 流式接口返回 `text/event-stream`，不包裹普通 JSON `Result`。
+
+Controller 接口参数使用字段参数接收，参数名和 DTO、Entity、VO 字段名保持一致。
+
 ## 认证接口
 
 注册：
 
 ```powershell
 curl -X POST http://localhost:8080/api/auth/register `
-  -H "Content-Type: application/json" `
-  -d '{"username":"alice","password":"password123","nickname":"Alice"}'
+  -d "username=alice" `
+  -d "password=password123" `
+  -d "nickname=Alice"
 ```
 
 登录：
 
 ```powershell
 curl -X POST http://localhost:8080/api/auth/login `
-  -H "Content-Type: application/json" `
-  -d '{"username":"alice","password":"password123"}'
+  -d "username=alice" `
+  -d "password=password123"
 ```
 
 当前用户：
@@ -111,8 +132,9 @@ curl http://localhost:8080/api/users/me `
 ```powershell
 curl -X PUT http://localhost:8080/api/users/me/profile `
   -H "Authorization: Bearer <accessToken>" `
-  -H "Content-Type: application/json" `
-  -d '{"travelStyle":"轻松","defaultBudgetLevel":"中等","preferredTransport":"地铁"}'
+  -d "travelStyle=轻松" `
+  -d "defaultBudgetLevel=中等" `
+  -d "preferredTransport=地铁"
 ```
 
 ## 行程草稿接口
@@ -122,8 +144,13 @@ curl -X PUT http://localhost:8080/api/users/me/profile `
 ```powershell
 curl -X POST http://localhost:8080/api/trips/draft `
   -H "Authorization: Bearer <accessToken>" `
-  -H "Content-Type: application/json" `
-  -d '{"destination":"成都","startDate":"2099-06-01","days":3,"budget":3000,"peopleCount":2,"preferences":["美食"],"userInput":"想吃火锅"}'
+  -d "destination=成都" `
+  -d "startDate=2099-06-01" `
+  -d "days=3" `
+  -d "budget=3000" `
+  -d "peopleCount=2" `
+  -d "preferences=美食" `
+  -d "userInput=想吃火锅"
 ```
 
 查询历史：
@@ -148,8 +175,14 @@ curl http://localhost:8080/api/trips/<planId> `
 curl -N -X POST http://localhost:8080/api/trips/stream-plan `
   -H "Authorization: Bearer <accessToken>" `
   -H "Accept: text/event-stream" `
-  -H "Content-Type: application/json" `
-  -d '{"destination":"成都","startDate":"2099-06-01","days":3,"budget":3000,"peopleCount":2,"preferences":["美食","文化"],"userInput":"想吃火锅，行程不要太赶"}'
+  -d "destination=成都" `
+  -d "startDate=2099-06-01" `
+  -d "days=3" `
+  -d "budget=3000" `
+  -d "peopleCount=2" `
+  -d "preferences=美食" `
+  -d "preferences=文化" `
+  -d "userInput=想吃火锅，行程不要太赶"
 ```
 
 对已生成行程发起二次调整，并流式接收调整建议：
@@ -158,8 +191,7 @@ curl -N -X POST http://localhost:8080/api/trips/stream-plan `
 curl -N -X POST http://localhost:8080/api/trips/<planId>/adjust-stream `
   -H "Authorization: Bearer <accessToken>" `
   -H "Accept: text/event-stream" `
-  -H "Content-Type: application/json" `
-  -d '{"instruction":"把第二天改得轻松一些，增加一家本地餐厅"}'
+  -d "instruction=把第二天改得轻松一些，增加一家本地餐厅"
 ```
 
 ## 工具状态接口

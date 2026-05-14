@@ -3,6 +3,7 @@
  */
 package com.aitour.controller;
 
+import com.aitour.common.Result;
 import com.aitour.common.dto.TripDtos;
 import com.aitour.config.security.CurrentUser;
 import com.aitour.service.TripAdjustmentService;
@@ -15,17 +16,24 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
+import jakarta.validation.constraints.FutureOrPresent;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -39,6 +47,7 @@ import java.util.concurrent.CompletableFuture;
 @RequestMapping("/api/trips")
 @Tag(name = "行程接口", description = "行程草稿、历史查询、SSE 流式生成和行程二次调整")
 @SecurityRequirement(name = "bearerAuth")
+@Validated
 public class TripController {
     private final TripDraftService tripDraftService;
     private final TripQueryService tripQueryService;
@@ -67,11 +76,18 @@ public class TripController {
     @Operation(summary = "创建行程草稿", description = "保存用户出行需求，返回待生成行程的 planId。")
     @ApiResponse(responseCode = "200", description = "创建成功")
     @ApiResponse(responseCode = "401", description = "未登录或 token 无效")
-    public Map<String, Long> createDraft(
+    public Result<Map<String, Long>> createDraft(
             @Parameter(hidden = true) @AuthenticationPrincipal CurrentUser currentUser,
-            @Valid @RequestBody TripDtos.CreateTripRequest request
+            @Parameter(description = "目的地城市或区域") @RequestParam @NotBlank String destination,
+            @Parameter(description = "出发日期") @RequestParam @NotNull @FutureOrPresent LocalDate startDate,
+            @Parameter(description = "出行天数，范围 1-15") @RequestParam @NotNull @Min(1) @Max(15) Integer days,
+            @Parameter(description = "总预算") @RequestParam(required = false) BigDecimal budget,
+            @Parameter(description = "出行人数，范围 1-20") @RequestParam @NotNull @Min(1) @Max(20) Integer peopleCount,
+            @Parameter(description = "偏好标签") @RequestParam(required = false) List<String> preferences,
+            @Parameter(description = "用户补充需求") @RequestParam(required = false) String userInput
     ) throws JsonProcessingException {
-        return Map.of("planId", tripDraftService.createDraft(currentUser.id(), request));
+        TripDtos.CreateTripRequest request = buildCreateTripRequest(destination, startDate, days, budget, peopleCount, preferences, userInput);
+        return Result.success(Map.of("planId", tripDraftService.createDraft(currentUser.id(), request)));
     }
 
     /**
@@ -83,10 +99,17 @@ public class TripController {
     @ApiResponse(responseCode = "401", description = "未登录或 token 无效")
     public SseEmitter streamPlan(
             @Parameter(hidden = true) @AuthenticationPrincipal CurrentUser currentUser,
-            @Valid @RequestBody TripDtos.CreateTripRequest request
+            @Parameter(description = "目的地城市或区域") @RequestParam @NotBlank String destination,
+            @Parameter(description = "出发日期") @RequestParam @NotNull @FutureOrPresent LocalDate startDate,
+            @Parameter(description = "出行天数，范围 1-15") @RequestParam @NotNull @Min(1) @Max(15) Integer days,
+            @Parameter(description = "总预算") @RequestParam(required = false) BigDecimal budget,
+            @Parameter(description = "出行人数，范围 1-20") @RequestParam @NotNull @Min(1) @Max(20) Integer peopleCount,
+            @Parameter(description = "偏好标签") @RequestParam(required = false) List<String> preferences,
+            @Parameter(description = "用户补充需求") @RequestParam(required = false) String userInput
     ) {
         SseEmitter emitter = new SseEmitter(120_000L);
         Long userId = currentUser.id();
+        TripDtos.CreateTripRequest request = buildCreateTripRequest(destination, startDate, days, budget, peopleCount, preferences, userInput);
         CompletableFuture.runAsync(() -> tripPlanningService.streamPlan(userId, request, emitter));
         return emitter;
     }
@@ -101,10 +124,11 @@ public class TripController {
     public SseEmitter adjustStream(
             @Parameter(hidden = true) @AuthenticationPrincipal CurrentUser currentUser,
             @Parameter(description = "行程 ID") @PathVariable Long id,
-            @Valid @RequestBody TripDtos.AdjustTripRequest request
+            @Parameter(description = "调整指令") @RequestParam @NotBlank String instruction
     ) {
         SseEmitter emitter = new SseEmitter(120_000L);
         Long userId = currentUser.id();
+        TripDtos.AdjustTripRequest request = new TripDtos.AdjustTripRequest(instruction);
         CompletableFuture.runAsync(() -> tripAdjustmentService.streamAdjust(userId, id, request, emitter));
         return emitter;
     }
@@ -116,8 +140,8 @@ public class TripController {
     @Operation(summary = "查询行程列表", description = "查询当前登录用户的历史行程概要。")
     @ApiResponse(responseCode = "200", description = "查询成功")
     @ApiResponse(responseCode = "401", description = "未登录或 token 无效")
-    public List<TripDtos.TripSummaryResponse> list(@Parameter(hidden = true) @AuthenticationPrincipal CurrentUser currentUser) {
-        return tripQueryService.listTrips(currentUser.id());
+    public Result<List<TripDtos.TripSummaryResponse>> list(@Parameter(hidden = true) @AuthenticationPrincipal CurrentUser currentUser) {
+        return Result.success(tripQueryService.listTrips(currentUser.id()));
     }
 
     /**
@@ -128,10 +152,25 @@ public class TripController {
     @ApiResponse(responseCode = "200", description = "查询成功")
     @ApiResponse(responseCode = "401", description = "未登录或 token 无效")
     @ApiResponse(responseCode = "404", description = "行程不存在")
-    public TripDtos.TripDetailResponse detail(
+    public Result<TripDtos.TripDetailResponse> detail(
             @Parameter(hidden = true) @AuthenticationPrincipal CurrentUser currentUser,
             @Parameter(description = "行程 ID") @PathVariable Long id
     ) {
-        return tripQueryService.getTrip(currentUser.id(), id);
+        return Result.success(tripQueryService.getTrip(currentUser.id(), id));
+    }
+
+    /**
+     * 将 Controller 接收的独立字段组装为 Service 层使用的行程请求 DTO。
+     */
+    private TripDtos.CreateTripRequest buildCreateTripRequest(
+            String destination,
+            LocalDate startDate,
+            Integer days,
+            BigDecimal budget,
+            Integer peopleCount,
+            List<String> preferences,
+            String userInput
+    ) {
+        return new TripDtos.CreateTripRequest(destination, startDate, days, budget, peopleCount, preferences, userInput);
     }
 }

@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -15,6 +14,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * 验证行程草稿和查询接口在统一 Result 响应结构下正常工作。
+ *
+ * @author myoung
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 class TripControllerTest {
@@ -22,18 +26,25 @@ class TripControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
+    /**
+     * 创建草稿、查询列表和详情时，业务数据应位于 Result.data 中。
+     */
     @Test
     void shouldCreateDraftAndQueryTrips() throws Exception {
         String token = registerAndGetToken();
 
         String response = mockMvc.perform(post("/api/trips/draft")
                         .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"destination":"成都","startDate":"2099-06-01","days":3,"budget":3000,"peopleCount":2,"preferences":["美食"],"userInput":"想吃火锅"}
-                                """))
+                        .param("destination", "成都")
+                        .param("startDate", "2099-06-01")
+                        .param("days", "3")
+                        .param("budget", "3000")
+                        .param("peopleCount", "2")
+                        .param("preferences", "美食")
+                        .param("userInput", "想吃火锅"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.planId").isNumber())
+                .andExpect(jsonPath("$.code").value(1))
+                .andExpect(jsonPath("$.data.planId").isNumber())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -42,19 +53,23 @@ class TripControllerTest {
 
         mockMvc.perform(get("/api/trips").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].title").value("成都3日智能行程"));
+                .andExpect(jsonPath("$.code").value(1))
+                .andExpect(jsonPath("$.data[0].title").value("成都3日智能行程"));
 
         mockMvc.perform(get("/api/trips/" + planId).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(Long.parseLong(planId)));
+                .andExpect(jsonPath("$.code").value(1))
+                .andExpect(jsonPath("$.data.id").value(Long.parseLong(planId)));
     }
 
+    /**
+     * 注册临时用户并从统一 Result.data 中提取访问令牌。
+     */
     private String registerAndGetToken() throws Exception {
         String body = mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"username":"trip-user","password":"password123","nickname":"Trip User"}
-                                """))
+                        .param("username", "trip-user")
+                        .param("password", "password123")
+                        .param("nickname", "Trip User"))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();

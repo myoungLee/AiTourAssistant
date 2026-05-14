@@ -3,6 +3,7 @@
  */
 package com.aitour.controller;
 
+import com.aitour.common.Result;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -31,11 +32,11 @@ public class HealthController {
     @SecurityRequirements
     @Operation(summary = "健康检查", description = "无需登录，返回服务状态、服务名和当前时间。")
     @ApiResponse(responseCode = "200", description = "服务可用")
-    public Map<String, Object> health() {
-        return Map.of(
+    public Result<Map<String, Object>> health() {
+        return Result.success(Map.of(
                 "status", "UP",
                 "service", "aitour-backend",
                 "timestamp", Instant.now().toString()
-        );
+        ));
     }
 }

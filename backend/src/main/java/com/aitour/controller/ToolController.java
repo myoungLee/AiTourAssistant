@@ -4,6 +4,7 @@
 package com.aitour.controller;
 
 import com.aitour.client.mcp.McpToolRegistry;
+import com.aitour.common.Result;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -26,6 +27,9 @@ import java.util.Map;
 public class ToolController {
     private final McpToolRegistry toolRegistry;
 
+    /**
+     * 注入 MCP 工具注册表。
+     */
     public ToolController(McpToolRegistry toolRegistry) {
         this.toolRegistry = toolRegistry;
     }
@@ -37,10 +41,10 @@ public class ToolController {
     @Operation(summary = "查询工具状态", description = "返回当前 MCP 工具模式和已注册工具名称。")
     @ApiResponse(responseCode = "200", description = "查询成功")
     @ApiResponse(responseCode = "401", description = "未登录或 token 无效")
-    public Map<String, Object> status() {
-        return Map.of(
+    public Result<Map<String, Object>> status() {
+        return Result.success(Map.of(
                 "mode", "local",
                 "tools", toolRegistry.names()
-        );
+        ));
     }
 }

@@ -6,7 +6,7 @@ package com.aitour.client.ai;
 import java.util.List;
 
 /**
- * AI 聊天请求，保持和 OpenAI-compatible chat/completions 结构接近。
+ * AI 聊天请求，保持简洁 role/content 结构，由 Spring AI 适配具体模型协议。
  *
  * @author myoung
  */

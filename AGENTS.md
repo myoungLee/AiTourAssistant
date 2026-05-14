@@ -24,15 +24,22 @@
 - 修改代码前先理解相关模块边界。
 - 不随意引入新依赖、中间件或架构层，除非用户确认。
 - 后端开发、测试和运行统一使用 JDK 21，整体基于 Spring Boot 开发，使用内嵌 Tomcat 作为 Web 服务器。
-- 后端项目结构按照 `controller`、`service`、`domain`、`mapper`、`client`、`config`、`common` 组织：
+- 后端项目结构按照 `controller`、`service`、`service.impl`、`domain`、`mapper`、`client`、`config`、`common` 组织：
   - `controller`：接收请求、参数校验、返回结果。
-  - `service`：编排业务流程。
+  - `service`：编排业务流程的接口定义，Controller 和其他上层模块优先依赖接口。
+  - `service.impl`：`service` 接口的具体实现类，实现类命名统一使用 `XxxServiceImpl`。
   - `domain`：核心业务模型和业务规则。
   - `mapper`：访问数据库。
   - `client`：调用第三方服务，例如天气、地图、大模型和 MCP 工具适配。
   - `config`：配置类。
-  - `common`：通用工具、异常、响应封装、DTO、Entity、VO。
+  - `common`：通用工具、异常、统一响应对象、DTO、Entity、VO。
 - 数据库连接池统一使用 Druid，除非用户明确确认，不切换为其他连接池。
+- Controller 层只负责接收请求参数、参数校验和返回结果；普通 REST 接口统一返回 `Result<T>`。
+- Controller 方法优先接收独立请求参数，不直接接收完整 Request DTO；如需传入 Service，可在 Controller 内用参数组装 DTO。
+- Controller 参数命名必须和 DTO、Entity、VO 字段保持一致，避免前后端字段语义分裂。
+- SSE 等流式接口可以按协议返回 `SseEmitter`，不强行包裹普通 JSON `Result`。
+- 大模型接入统一使用 Spring AI 官方 `ChatClient` / OpenAI Starter，配置使用 `spring.ai.openai.*`；除模型 Key 从环境变量读取外，模型地址、模型名、推理等级等写入配置文件。
+- 不手写 `java.net.http.HttpClient` 或其他底层 HTTP 客户端直连大模型接口，除非用户后续明确要求绕开 Spring AI。
 - 不提交密钥、Token、数据库密码或其他敏感信息。
 - 测试、构建、运行结果必须基于实际命令输出，不凭推测声明通过。
 - 新增或修改代码文件时，文件顶部必须添加作者注释：`@author myoung`。
