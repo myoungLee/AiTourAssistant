@@ -26,3 +26,10 @@ mybatis-plus:
   global-config:
     db-config:
       id-type: assign_id
+
+security:
+  jwt:
+    issuer: aitour
+    secret: ${JWT_SECRET:aitour-local-development-secret-must-be-32-bytes}
+    access-token-minutes: 120
+    refresh-token-days: 14

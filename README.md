@@ -21,6 +21,7 @@
 $env:MYSQL_USERNAME="root"
 $env:MYSQL_PASSWORD="your-password"
 $env:REDIS_PASSWORD="your-password"
+$env:JWT_SECRET="your-32-byte-or-longer-jwt-secret"
 ```
 
 如果需要用 Docker 启动中间件，先复制 `.env.example` 为 `.env` 并填写本地密码：
@@ -34,13 +35,47 @@ docker compose up -d
 
 ```powershell
 cd backend
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
+mvn.cmd spring-boot:run '-Dspring-boot.run.profiles=dev'
 ```
 
 健康检查：
 
 ```powershell
 curl http://localhost:8080/api/health
+```
+
+## 认证接口
+
+注册：
+
+```powershell
+curl -X POST http://localhost:8080/api/auth/register `
+  -H "Content-Type: application/json" `
+  -d '{"username":"alice","password":"password123","nickname":"Alice"}'
+```
+
+登录：
+
+```powershell
+curl -X POST http://localhost:8080/api/auth/login `
+  -H "Content-Type: application/json" `
+  -d '{"username":"alice","password":"password123"}'
+```
+
+当前用户：
+
+```powershell
+curl http://localhost:8080/api/users/me `
+  -H "Authorization: Bearer <accessToken>"
+```
+
+更新旅行偏好：
+
+```powershell
+curl -X PUT http://localhost:8080/api/users/me/profile `
+  -H "Authorization: Bearer <accessToken>" `
+  -H "Content-Type: application/json" `
+  -d '{"travelStyle":"轻松","defaultBudgetLevel":"中等","preferredTransport":"地铁"}'
 ```
 
 ## 前端启动
@@ -87,7 +122,8 @@ docker compose config
 $env:MYSQL_USERNAME="root"
 $env:MYSQL_PASSWORD="your-password"
 $env:REDIS_PASSWORD="your-password"
+$env:JWT_SECRET="your-32-byte-or-longer-jwt-secret"
 cd backend
-mvn.cmd spring-boot:run -Dspring-boot.run.profiles=dev
+mvn.cmd spring-boot:run '-Dspring-boot.run.profiles=dev'
 curl http://localhost:8080/api/health
 ```
