@@ -16,6 +16,7 @@ public record AiProperties(
         String baseUrl,
         String apiKey,
         String model,
+        String reasoningEffort,
         int timeoutSeconds
 ) {
 }

@@ -23,15 +23,22 @@
 
 ## 本地中间件
 
-如果本机已安装 MySQL 和 Redis，可以直接配置环境变量后启动后端。
+如果本机已安装 MySQL 和 Redis，可以直接使用 `backend/src/main/resources/application.yml` 中的本地配置启动后端。
 
-当前建议的本地环境变量：
+当前默认配置：
+
+```text
+MySQL: jdbc:mysql://localhost:3306/aitour
+MySQL 用户名: root
+MySQL 密码: young
+Redis: localhost:6379
+Redis 密码: young
+```
+
+AI 模型请求地址、模型名和推理等级写在配置文件中，只有模型 Key 从环境变量读取：
 
 ```powershell
-$env:MYSQL_USERNAME="root"
-$env:MYSQL_PASSWORD="your-password"
-$env:REDIS_PASSWORD="your-password"
-$env:JWT_SECRET="your-32-byte-or-longer-jwt-secret"
+$env:AI_API_KEY="your-api-key"
 ```
 
 如果需要用 Docker 启动中间件，先复制 `.env.example` 为 `.env` 并填写本地密码：
@@ -52,6 +59,26 @@ mvn.cmd spring-boot:run '-Dspring-boot.run.profiles=dev'
 
 ```powershell
 curl http://localhost:8080/api/health
+```
+
+## Swagger 接口测试文档
+
+启动后端后访问 Swagger UI：
+
+```text
+http://localhost:8080/swagger-ui.html
+```
+
+OpenAPI JSON 文档地址：
+
+```text
+http://localhost:8080/v3/api-docs
+```
+
+需要登录的接口在 Swagger UI 右上角点击 `Authorize`，填入登录接口返回的 `accessToken`：
+
+```text
+Bearer <accessToken>
 ```
 
 ## 认证接口
@@ -185,10 +212,7 @@ docker compose config
 后端连接本机 MySQL 和 Redis 的冒烟验证：
 
 ```powershell
-$env:MYSQL_USERNAME="root"
-$env:MYSQL_PASSWORD="your-password"
-$env:REDIS_PASSWORD="your-password"
-$env:JWT_SECRET="your-32-byte-or-longer-jwt-secret"
+$env:AI_API_KEY="your-api-key"
 cd backend
 mvn.cmd spring-boot:run '-Dspring-boot.run.profiles=dev'
 curl http://localhost:8080/api/health

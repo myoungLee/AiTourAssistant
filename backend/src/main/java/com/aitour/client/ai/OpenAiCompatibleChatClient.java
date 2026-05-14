@@ -17,6 +17,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -44,13 +45,7 @@ public class OpenAiCompatibleChatClient implements AiChatClient {
         if (properties.apiKey() == null || properties.apiKey().isBlank()) {
             return buildLocalFallbackResponse(request);
         }
-        Map<String, Object> body = Map.of(
-                "model", properties.model(),
-                "stream", false,
-                "messages", request.messages().stream()
-                        .map(message -> Map.of("role", message.role(), "content", message.content()))
-                        .toList()
-        );
+        Map<String, Object> body = buildChatCompletionBody(request);
         try {
             HttpResponse<String> response = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofSeconds(properties.timeoutSeconds()))
@@ -90,6 +85,22 @@ public class OpenAiCompatibleChatClient implements AiChatClient {
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
                 .build();
+    }
+
+    /**
+     * 构造 Chat Completions 请求体，并按配置透传模型推理等级。
+     */
+    private Map<String, Object> buildChatCompletionBody(ChatRequest request) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", properties.model());
+        body.put("stream", false);
+        body.put("messages", request.messages().stream()
+                .map(message -> Map.of("role", message.role(), "content", message.content()))
+                .toList());
+        if (properties.reasoningEffort() != null && !properties.reasoningEffort().isBlank()) {
+            body.put("reasoning_effort", properties.reasoningEffort());
+        }
+        return body;
     }
 
     /**
