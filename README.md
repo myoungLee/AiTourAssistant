@@ -78,6 +78,31 @@ curl -X PUT http://localhost:8080/api/users/me/profile `
   -d '{"travelStyle":"轻松","defaultBudgetLevel":"中等","preferredTransport":"地铁"}'
 ```
 
+## 行程草稿接口
+
+创建草稿：
+
+```powershell
+curl -X POST http://localhost:8080/api/trips/draft `
+  -H "Authorization: Bearer <accessToken>" `
+  -H "Content-Type: application/json" `
+  -d '{"destination":"成都","startDate":"2099-06-01","days":3,"budget":3000,"peopleCount":2,"preferences":["美食"],"userInput":"想吃火锅"}'
+```
+
+查询历史：
+
+```powershell
+curl http://localhost:8080/api/trips `
+  -H "Authorization: Bearer <accessToken>"
+```
+
+查询详情：
+
+```powershell
+curl http://localhost:8080/api/trips/<planId> `
+  -H "Authorization: Bearer <accessToken>"
+```
+
 ## 前端启动
 
 ```powershell
