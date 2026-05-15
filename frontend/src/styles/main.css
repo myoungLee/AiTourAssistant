@@ -27,6 +27,12 @@ body {
   margin: 0 auto;
 }
 
+.hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .eyebrow {
   margin: 0 0 12px;
   color: #2563eb;
@@ -49,14 +55,240 @@ h1 {
   line-height: 1.75;
 }
 
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .status-card {
   border-radius: 8px;
+}
+
+.capability-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .status-card p {
   margin: 16px 0 0;
   color: #667085;
   line-height: 1.6;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.auth-panel {
+  width: min(920px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  background: #fff;
+  border: 1px solid #dfe6ef;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 18px 50px rgba(23, 32, 51, 0.08);
+}
+
+.auth-panel__intro {
+  padding: 40px;
+  background: #172033;
+  color: #fff;
+}
+
+.auth-panel__intro p,
+.auth-panel__intro span {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.auth-panel__intro h1 {
+  margin: 14px 0;
+  color: #fff;
+  font-size: 32px;
+}
+
+.auth-panel__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 36px 32px;
+}
+
+.auth-panel__submit {
+  width: 100%;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-shell__container {
+  min-height: 100vh;
+}
+
+.app-shell__aside {
+  border-right: 1px solid #dde5ef;
+  background: #fff;
+}
+
+.app-shell__brand {
+  padding: 24px 20px 12px;
+}
+
+.app-shell__brand p {
+  margin: 0 0 8px;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.app-shell__brand h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.app-shell__menu {
+  border-right: 0;
+}
+
+.app-shell__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: auto;
+  padding: 24px 32px 16px;
+  background: #fff;
+  border-bottom: 1px solid #dde5ef;
+}
+
+.app-shell__header h2 {
+  margin: 0 0 8px;
+  font-size: 24px;
+}
+
+.app-shell__header p {
+  margin: 0;
+  color: #5f6b7a;
+}
+
+.app-shell__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #172033;
+}
+
+.app-shell__main {
+  padding: 24px 32px 32px;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 440px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.w-full,
+.el-date-editor.el-input,
+.el-select {
+  width: 100%;
+}
+
+.stream-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.stream-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stream-panel h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.snapshot-list,
+.detail-days,
+.tool-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.snapshot-items {
+  margin: 0;
+  padding-left: 18px;
+  color: #334155;
+}
+
+.snapshot-items li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.summary-line,
+.detail-summary,
+.detail-weather {
+  margin: 0;
+  color: #475467;
+  line-height: 1.7;
+}
+
+.list-page,
+.detail-page,
+.profile-page,
+.tool-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.profile-user-card {
+  margin-bottom: 20px;
 }
 
 @media (max-width: 760px) {
@@ -70,5 +302,24 @@ h1 {
 
   h1 {
     font-size: 32px;
+  }
+
+  .auth-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-grid,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell__header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 20px 20px 16px;
+  }
+
+  .app-shell__main {
+    padding: 20px;
   }
 }

@@ -21,6 +21,6 @@ describe('App', () => {
     })
 
     expect(wrapper.text()).toContain('AI 旅游助手')
-    expect(wrapper.text()).toContain('基础工程搭建中')
+    expect(wrapper.text()).toContain('登录开始使用')
   })
 })

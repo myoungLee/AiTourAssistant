@@ -55,6 +55,20 @@ export interface ProfileResponse {
 }
 
 /**
+ * 更新用户画像请求字段。
+ *
+ * @author myoung
+ */
+export interface UpdateProfileRequest {
+  gender?: string | null
+  ageRange?: string | null
+  travelStyle?: string | null
+  defaultBudgetLevel?: string | null
+  preferredTransport?: string | null
+  preferencesJson?: string | null
+}
+
+/**
  * 创建行程请求字段。
  *
  * @author myoung
@@ -148,3 +162,84 @@ export interface ToolStatusResponse {
   mode: string
   tools: string[]
 }
+
+/**
+ * SSE 事件名称。
+ *
+ * @author myoung
+ */
+export type StreamEventName = 'progress' | 'tool_result' | 'plan_snapshot' | 'ai_delta' | 'completed' | 'error'
+
+/**
+ * SSE 进度事件。
+ *
+ * @author myoung
+ */
+export interface ProgressEvent {
+  step: string
+  message: string
+  percent: number
+}
+
+/**
+ * SSE 工具结果事件。
+ *
+ * @author myoung
+ */
+export interface ToolResultEvent {
+  tool: string
+  summary: string
+  data?: Record<string, unknown>
+}
+
+/**
+ * SSE 行程快照事件。
+ *
+ * @author myoung
+ */
+export interface PlanSnapshotEvent {
+  dayIndex: number
+  items: TripItemResponse[]
+}
+
+/**
+ * SSE AI 增量事件。
+ *
+ * @author myoung
+ */
+export interface AiDeltaEvent {
+  text: string
+}
+
+/**
+ * SSE 完成事件。
+ *
+ * @author myoung
+ */
+export interface CompletedEvent {
+  planId: number
+  status: string
+}
+
+/**
+ * SSE 错误事件。
+ *
+ * @author myoung
+ */
+export interface ErrorEvent {
+  code: string
+  message: string
+}
+
+/**
+ * SSE 解析结果，按事件名返回结构化数据。
+ *
+ * @author myoung
+ */
+export type StreamEvent =
+  | { event: 'progress'; data: ProgressEvent }
+  | { event: 'tool_result'; data: ToolResultEvent }
+  | { event: 'plan_snapshot'; data: PlanSnapshotEvent }
+  | { event: 'ai_delta'; data: AiDeltaEvent }
+  | { event: 'completed'; data: CompletedEvent }
+  | { event: 'error'; data: ErrorEvent }
