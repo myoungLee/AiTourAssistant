@@ -251,3 +251,19 @@ cd backend
 mvn.cmd spring-boot:run
 curl http://localhost:8080/api/health
 ```
+
+## 当前交付清单
+
+当前架构的本地联调与交付检查项已整理到：
+
+- [current-local-smoke-test.md](D:/project/AiTourAssistant/docs/superpowers/checklists/current-local-smoke-test.md)
+
+建议在每次阶段性提交前，按清单依次执行：
+
+- `docker compose config`
+- `cd backend && mvn.cmd test`
+- `cd backend && mvn.cmd spring-boot:run`
+- `Swagger UI / v3/api-docs` 访问验证
+- 认证、用户资料、行程草稿、SSE、历史行程、工具状态接口验证
+- `cd frontend && npm.cmd run test`
+- `cd frontend && npm.cmd run build`
