@@ -60,6 +60,7 @@ class ToolControllerTest {
         mockMvc.perform(get("/api/tools/status").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(1))
+                .andExpect(jsonPath("$.data.mode").value("local"))
                 .andExpect(jsonPath("$.data.tools").isArray());
     }
 

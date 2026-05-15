@@ -35,15 +35,15 @@ public class ToolController {
     }
 
     /**
-     * 查询当前后端内置 MCP 工具状态。
+     * 查询当前后端生效的 MCP 工具模式和工具清单。
      */
     @GetMapping("/status")
-    @Operation(summary = "查询工具状态", description = "返回当前 MCP 工具模式和已注册工具名称。")
+    @Operation(summary = "查询工具状态", description = "返回当前 MCP 工具模式和已注册工具名称")
     @ApiResponse(responseCode = "200", description = "查询成功")
     @ApiResponse(responseCode = "401", description = "未登录或 token 无效")
     public Result<Map<String, Object>> status() {
         return Result.success(Map.of(
-                "mode", "local",
+                "mode", toolRegistry.mode(),
                 "tools", toolRegistry.names()
         ));
     }

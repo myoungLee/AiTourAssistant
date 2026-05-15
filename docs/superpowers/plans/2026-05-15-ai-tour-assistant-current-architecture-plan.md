@@ -29,10 +29,10 @@
 ## 阶段状态
 
 - [x] Task 0: 收尾当前架构调整。已完成 `Result<T>`、`service.impl`、Controller 字段参数、Spring AI 接入和主计划更新，并已推送。
-- [ ] Task 1: 前端适配统一 `Result<T>` 和字段参数。下一步优先执行。
-- [ ] Task 2: 完善前端核心页面。
-- [ ] Task 3: Redis 登录态与缓存使用落地。
-- [ ] Task 4: MCP 工具模式配置化增强。Spring AI 接入部分已完成，剩余工作是本地/外部 MCP 模式切换。
+- [x] Task 1: 前端适配统一 `Result<T>` 和字段参数。已完成并推送。
+- [x] Task 2: 完善前端核心页面。已完成并推送。
+- [x] Task 3: Redis 登录态与缓存使用落地。已完成并推送。
+- [x] Task 4: MCP 工具模式配置化增强。已完成本地/外部 MCP 模式切换与真实外部 MCP 调用能力，并已推送。
 - [ ] Task 5: 行程生成质量和持久化细化。
 - [ ] Task 6: Swagger 和接口测试文档补齐。
 - [ ] Task 7: 本地联调和交付清单。
@@ -341,6 +341,8 @@ git commit -m "feat: 完善前端核心页面"
 
 ## Task 3: Redis 登录态与缓存使用落地
 
+> 状态：已完成并推送。包含 `refreshToken` Redis 持久化、`/api/auth/logout`、accessToken 黑名单校验和当前用户缓存失效处理。
+
 **Files:**
 
 - Modify: `backend/src/main/java/com/aitour/controller/AuthController.java`
@@ -407,7 +409,7 @@ git commit -m "feat: 落地 Redis 登录态与退出登录"
 
 ## Task 4: MCP 工具模式配置化增强
 
-> 状态：Spring AI 接入部分已完成。本任务只处理剩余的 MCP 本地/外部模式切换，不再重复改模型接入。
+> 状态：已完成并推送。已补充 `mcp.mode` / `mcp.external.*` 配置、`McpToolRegistry` 模式路由、真实外部 MCP Server HTTP/JSON-RPC 调用和对应测试，不再重复改模型接入。
 
 **Files:**
 
