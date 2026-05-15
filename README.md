@@ -82,6 +82,8 @@ http://localhost:8080/v3/api-docs
 Bearer <accessToken>
 ```
 
+Swagger 文档按当前 Controller 约定直接展示字段参数，不要求手工拼装 JSON `requestBody`。`/api/trips/draft`、`/api/tools/status`、`/api/health` 等接口也已经使用明确响应模型展示 `Result<T>` 内部的 `data` 结构，便于直接在 Swagger UI 中调试和查看返回字段。
+
 ## 接口响应约定
 
 普通 REST 接口统一返回 `Result<T>`：

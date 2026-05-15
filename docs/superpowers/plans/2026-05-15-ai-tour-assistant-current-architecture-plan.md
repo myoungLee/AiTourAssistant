@@ -34,7 +34,7 @@
 - [x] Task 3: Redis 登录态与缓存使用落地。已完成并推送。
 - [x] Task 4: MCP 工具模式配置化增强。已完成本地/外部 MCP 模式切换与真实外部 MCP 调用能力，并已推送。
 - [x] Task 5: 行程生成质量和持久化细化。已完成预算提醒、节奏调整、同日去重和调用日志测试补齐，并已推送。
-- [ ] Task 6: Swagger 和接口测试文档补齐。
+- [x] Task 6: Swagger 和接口测试文档补齐。已补齐字段参数文档校验、明确响应 schema 和 Swagger 使用说明，并已推送。
 - [ ] Task 7: 本地联调和交付清单。
 
 ## 当前基线
@@ -537,7 +537,7 @@ git commit -m "feat: 优化行程生成质量和调用日志"
 - Modify: `backend/src/test/java/com/aitour/controller/SwaggerDocumentationTest.java`
 - Modify: `README.md`
 
-- [ ] **Step 1: 基于现有注解补齐缺口**
+- [x] **Step 1: 基于现有注解补齐缺口**
 
 验收标准：
 
@@ -549,7 +549,7 @@ DTO 和统一 Result<T> 在文档中有清晰 schema 展示。
 Swagger UI 中能看到字段参数，不再要求 JSON RequestBody。
 ```
 
-- [ ] **Step 2: 验证 Swagger 文档**
+- [x] **Step 2: 验证 Swagger 文档**
 
 Run:
 
@@ -564,7 +564,7 @@ Expected:
 BUILD SUCCESS
 ```
 
-- [ ] **Step 3: 提交并推送**
+- [x] **Step 3: 提交并推送**
 
 Commit:
 

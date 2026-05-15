@@ -4,6 +4,7 @@
 package com.aitour.controller;
 
 import com.aitour.common.Result;
+import com.aitour.common.dto.CommonDtos;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -13,7 +14,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
-import java.util.Map;
 
 /**
  * 提供基础健康检查接口，用于本地联调和部署探活。
@@ -32,11 +32,11 @@ public class HealthController {
     @SecurityRequirements
     @Operation(summary = "健康检查", description = "无需登录，返回服务状态、服务名和当前时间。")
     @ApiResponse(responseCode = "200", description = "服务可用")
-    public Result<Map<String, Object>> health() {
-        return Result.success(Map.of(
-                "status", "UP",
-                "service", "aitour-backend",
-                "timestamp", Instant.now().toString()
+    public Result<CommonDtos.HealthResponse> health() {
+        return Result.success(new CommonDtos.HealthResponse(
+                "UP",
+                "aitour-backend",
+                Instant.now().toString()
         ));
     }
 }

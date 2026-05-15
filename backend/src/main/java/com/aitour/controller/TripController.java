@@ -35,7 +35,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -76,7 +75,7 @@ public class TripController {
     @Operation(summary = "创建行程草稿", description = "保存用户出行需求，返回待生成行程的 planId。")
     @ApiResponse(responseCode = "200", description = "创建成功")
     @ApiResponse(responseCode = "401", description = "未登录或 token 无效")
-    public Result<Map<String, Long>> createDraft(
+    public Result<TripDtos.CreateDraftResponse> createDraft(
             @Parameter(hidden = true) @AuthenticationPrincipal CurrentUser currentUser,
             @Parameter(description = "目的地城市或区域") @RequestParam @NotBlank String destination,
             @Parameter(description = "出发日期") @RequestParam @NotNull @FutureOrPresent LocalDate startDate,
@@ -87,7 +86,8 @@ public class TripController {
             @Parameter(description = "用户补充需求") @RequestParam(required = false) String userInput
     ) throws JsonProcessingException {
         TripDtos.CreateTripRequest request = buildCreateTripRequest(destination, startDate, days, budget, peopleCount, preferences, userInput);
-        return Result.success(Map.of("planId", tripDraftService.createDraft(currentUser.id(), request)));
+        Long planId = tripDraftService.createDraft(currentUser.id(), request);
+        return Result.success(new TripDtos.CreateDraftResponse(planId));
     }
 
     /**

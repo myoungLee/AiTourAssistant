@@ -39,6 +39,16 @@ public final class TripDtos {
     }
 
     /**
+     * 创建行程草稿后返回的结果。
+     */
+    @Schema(description = "创建行程草稿响应")
+    public record CreateDraftResponse(
+            @Schema(description = "行程草稿 ID", example = "10001")
+            Long planId
+    ) {
+    }
+
+    /**
      * 用户对已有行程提出二次调整时的请求体。
      */
     @Schema(description = "行程二次调整请求")
