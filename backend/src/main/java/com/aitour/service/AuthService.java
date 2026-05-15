@@ -21,4 +21,9 @@ public interface AuthService {
      * 校验用户名密码并返回访问令牌信息。
      */
     AuthDtos.AuthResponse login(AuthDtos.LoginRequest request);
+
+    /**
+     * 将当前 accessToken 加入黑名单，表示用户主动退出登录。
+     */
+    void logout(String accessToken);
 }

@@ -5,15 +5,21 @@ package com.aitour.controller;
 
 import com.aitour.client.ai.AiChatClient;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
+import static com.aitour.support.RedisMockSupport.wireInMemoryRedis;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -34,6 +40,22 @@ class TripStreamControllerTest {
 
     @MockitoBean
     private AiChatClient aiChatClient;
+
+    @MockitoBean
+    private StringRedisTemplate stringRedisTemplate;
+
+    @MockitoBean
+    private ValueOperations<String, String> valueOperations;
+
+    private final Map<String, String> redisStore = new ConcurrentHashMap<>();
+
+    /**
+     * 为流式接口测试准备内存化 Redis mock。
+     */
+    @BeforeEach
+    void setUpRedisMock() {
+        wireInMemoryRedis(stringRedisTemplate, valueOperations, redisStore);
+    }
 
     /**
      * 已登录用户使用字段参数提交行程需求后，接口应返回异步 SSE 请求。

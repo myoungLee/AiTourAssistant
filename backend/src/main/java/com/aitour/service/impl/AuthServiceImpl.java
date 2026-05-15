@@ -80,11 +80,19 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
+     * 将当前 accessToken 加入黑名单，后续同一 token 在剩余有效期内不能再访问受保护接口。
+     */
+    @Override
+    public void logout(String accessToken) {
+        jwtTokenService.blacklistAccessToken(accessToken);
+    }
+
+    /**
      * 将用户实体转换为认证响应，并生成 accessToken 和 refreshToken。
      */
     private AuthDtos.AuthResponse toAuthResponse(User user) {
         String accessToken = jwtTokenService.createAccessToken(user.getId(), user.getUsername());
-        String refreshToken = UUID.randomUUID().toString();
+        String refreshToken = jwtTokenService.createRefreshToken(user.getId());
         return new AuthDtos.AuthResponse(accessToken, refreshToken, user.getId(), user.getUsername(), user.getNickname());
     }
 

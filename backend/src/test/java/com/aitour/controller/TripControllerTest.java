@@ -4,11 +4,19 @@
 package com.aitour.controller;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import static com.aitour.support.RedisMockSupport.wireInMemoryRedis;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -25,6 +33,22 @@ class TripControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockitoBean
+    private StringRedisTemplate stringRedisTemplate;
+
+    @MockitoBean
+    private ValueOperations<String, String> valueOperations;
+
+    private final Map<String, String> redisStore = new ConcurrentHashMap<>();
+
+    /**
+     * 为需要登录态的行程接口测试准备内存化 Redis mock。
+     */
+    @BeforeEach
+    void setUpRedisMock() {
+        wireInMemoryRedis(stringRedisTemplate, valueOperations, redisStore);
+    }
 
     /**
      * 创建草稿、查询列表和详情时，业务数据应位于 Result.data 中。

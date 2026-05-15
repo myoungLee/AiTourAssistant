@@ -6,15 +6,19 @@ package com.aitour.controller;
 import com.aitour.common.Result;
 import com.aitour.common.dto.AuthDtos;
 import com.aitour.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.validation.annotation.Validated;
@@ -69,5 +73,36 @@ public class AuthController {
     ) {
         AuthDtos.LoginRequest request = new AuthDtos.LoginRequest(username, password);
         return Result.success(authService.login(request));
+    }
+
+    /**
+     * 将当前 accessToken 加入 Redis 黑名单，表示用户主动退出登录。
+     */
+    @PostMapping("/logout")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "退出登录", description = "将当前 accessToken 加入 Redis 黑名单，在剩余有效期内拒绝继续访问。")
+    @ApiResponse(responseCode = "200", description = "退出成功")
+    @ApiResponse(responseCode = "401", description = "未登录或 token 无效")
+    public Result<Void> logout(
+            @Parameter(description = "待拉黑的 accessToken，默认优先使用该字段，未传时回退到 Authorization Bearer Token")
+            @RequestParam(required = false) String accessToken,
+            @Parameter(hidden = true)
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization
+    ) {
+        authService.logout(resolveAccessToken(accessToken, authorization));
+        return Result.success();
+    }
+
+    /**
+     * 优先使用字段参数中的 accessToken，未传时再从 Authorization Bearer 头中提取。
+     */
+    private String resolveAccessToken(String accessToken, String authorization) {
+        if (accessToken != null && !accessToken.isBlank()) {
+            return accessToken;
+        }
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            return authorization.substring(7);
+        }
+        return "";
     }
 }
