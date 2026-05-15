@@ -3,6 +3,8 @@
  */
 package com.aitour.common.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
 import java.math.BigDecimal;
@@ -15,6 +17,7 @@ import java.time.LocalDate;
  */
 @TableName("trip_day")
 public class TripDay {
+    @TableId(type = IdType.AUTO)
     private Long id;
     private Long planId;
     private Integer dayIndex;

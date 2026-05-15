@@ -3,6 +3,8 @@
  */
 package com.aitour.controller;
 
+import com.aitour.common.entity.User;
+import com.aitour.mapper.UserMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +23,7 @@ import static com.aitour.support.RedisMockSupport.wireInMemoryRedis;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -41,6 +44,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private ValueOperations<String, String> valueOperations;
+
+    @Autowired
+    private UserMapper userMapper;
 
     private final Map<String, String> redisStore = new ConcurrentHashMap<>();
 
@@ -100,6 +106,29 @@ class AuthControllerTest {
     }
 
     /**
+     * 注册用户后，数据库中应按当前测试约定保存明文密码。
+     */
+    @Test
+    void shouldStorePasswordAsPlainTextForTesting() throws Exception {
+        String username = "plain-" + UUID.randomUUID();
+        Long userId = registerAndGetUserId(username);
+
+        User savedUser = userMapper.selectById(userId);
+        assertThat(savedUser).isNotNull();
+        assertThat(savedUser.getPasswordHash()).isEqualTo("password123");
+    }
+
+    /**
+     * 请求进入后应暴露 traceId 响应头，便于定位同一次请求的后端日志。
+     */
+    @Test
+    void shouldExposeTraceIdHeader() throws Exception {
+        mockMvc.perform(get("/api/health"))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("X-Trace-Id"));
+    }
+
+    /**
      * 注册测试用户并返回 accessToken，供后续受保护接口测试复用。
      */
     private String registerAndGetToken(String username) throws Exception {
@@ -112,5 +141,20 @@ class AuthControllerTest {
                 .getResponse()
                 .getContentAsString();
         return body.replaceAll(".*\"accessToken\":\"([^\"]+)\".*", "$1");
+    }
+
+    /**
+     * 注册测试用户并返回数据库生成的用户主键。
+     */
+    private Long registerAndGetUserId(String username) throws Exception {
+        String body = mockMvc.perform(post("/api/auth/register")
+                        .param("username", username)
+                        .param("password", "password123")
+                        .param("nickname", "Auth User"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return Long.valueOf(body.replaceAll(".*\"userId\":([0-9]+).*", "$1"));
     }
 }

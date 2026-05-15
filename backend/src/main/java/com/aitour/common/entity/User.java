@@ -4,17 +4,20 @@
 package com.aitour.common.entity;
 
 import com.aitour.domain.UserStatus;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
 import java.time.Instant;
 
 /**
- * 用户主表实体，密码只保存 BCrypt 哈希，不保存明文。
+ * 用户主表实体，当前测试阶段按用户要求直接保存密码字段原值。
  *
  * @author myoung
  */
 @TableName("users")
 public class User {
+    @TableId(type = IdType.AUTO)
     private Long id;
     private String username;
     private String passwordHash;

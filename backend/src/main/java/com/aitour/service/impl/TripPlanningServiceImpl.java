@@ -46,10 +46,9 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
- * 流式行程规划服务，串联草稿创建、本地 MCP 工具、规则规划、AI 摘要和最终持久化。
+ * 流式行程规划服务，负责草稿创建、MCP 工具调用、规则编排、AI 总结和结果持久化。
  *
  * @author myoung
  */
@@ -76,7 +75,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
     private final ObjectMapper objectMapper;
 
     /**
-     * 注入规划所需的业务服务、工具注册表、规则组件和持久化 mapper。
+     * 注入规划所需的业务服务、规则组件和持久化组件。
      */
     public TripPlanningServiceImpl(
             TripDraftService tripDraftService,
@@ -117,15 +116,26 @@ public class TripPlanningServiceImpl implements TripPlanningService {
     }
 
     /**
-     * 执行主规划流程，并按阶段向 SSE 连接发送 progress、tool_result、plan_snapshot、ai_delta 和 completed 事件。
+     * 执行完整的流式规划流程，并通过 SSE 按阶段推送事件。
      */
     @Override
     public void streamPlan(Long userId, TripDtos.CreateTripRequest request, SseEmitter emitter) {
         Long planId = null;
+        Instant overallStart = Instant.now();
+        log.info("流式行程规划开始，userId={} destination={} startDate={} days={} peopleCount={} budget={} preferencesCount={} mcpMode={}",
+                userId,
+                request.destination(),
+                request.startDate(),
+                request.days(),
+                request.peopleCount(),
+                request.budget(),
+                safePreferences(request).size(),
+                toolRegistry.mode());
         try {
             publisher.send(emitter, "progress", new SseDtos.ProgressEvent("parse", "正在解析出行需求", 10));
             planId = tripDraftService.createDraft(userId, request);
             markPlanGenerating(planId);
+            log.info("流式行程草稿准备完成，planId={} userId={}", planId, userId);
 
             ToolResult weather = executeToolWithLog("weather.query", userId, planId, Map.of("city", request.destination()));
             publisher.send(emitter, "progress", new SseDtos.ProgressEvent("weather", "正在查询天气", 25));
@@ -139,10 +149,16 @@ public class TripPlanningServiceImpl implements TripPlanningService {
             publisher.send(emitter, "tool_result", new SseDtos.ToolResultEvent(places.toolName(), places.summary(), places.data()));
 
             List<Map<String, Object>> rankedPlaces = attractionRanker.rank(extractPlaces(places));
+            log.info("景点排序完成，planId={} rankedPlaceCount={}", planId, rankedPlaces.size());
             ToolResult route = executeRouteTool(userId, planId, request.destination(), rankedPlaces);
             publisher.send(emitter, "tool_result", new SseDtos.ToolResultEvent(route.toolName(), route.summary(), route.data()));
 
             BudgetEstimator.BudgetDraft budget = budgetEstimator.estimate(request.days(), request.peopleCount(), request.budget());
+            log.info("预算估算完成，planId={} total={} recommendedTotal={} insufficient={}",
+                    planId,
+                    budget.total(),
+                    budget.recommendedTotal(),
+                    budget.insufficient());
             ToolResult budgetTool = executeToolWithLog("budget.estimate", userId, planId, Map.of(
                     "days", request.days(),
                     "peopleCount", request.peopleCount()
@@ -164,6 +180,10 @@ public class TripPlanningServiceImpl implements TripPlanningService {
                     safePreferences(request),
                     budget
             );
+            log.info("日程编排完成，planId={} dayCount={} itemCount={}",
+                    planId,
+                    schedules.size(),
+                    schedules.stream().mapToInt(schedule -> schedule.items().size()).sum());
             publisher.send(emitter, "progress", new SseDtos.ProgressEvent("compose", "正在生成每日行程", 80));
             for (DaySchedulePlanner.DaySchedule schedule : schedules) {
                 publisher.send(emitter, "plan_snapshot", new SseDtos.PlanSnapshotEvent(schedule.dayIndex(), schedule.items()));
@@ -175,8 +195,16 @@ public class TripPlanningServiceImpl implements TripPlanningService {
 
             publisher.send(emitter, "completed", new SseDtos.CompletedEvent(planId, TripPlanStatus.GENERATED.name()));
             publisher.complete(emitter);
+            log.info("流式行程规划完成，planId={} userId={} durationMs={}",
+                    planId,
+                    userId,
+                    Duration.between(overallStart, Instant.now()).toMillis());
         } catch (Exception ex) {
-            log.warn("行程生成流程失败，planId={}", planId, ex);
+            log.warn("流式行程规划失败，planId={} userId={} durationMs={}",
+                    planId,
+                    userId,
+                    Duration.between(overallStart, Instant.now()).toMillis(),
+                    ex);
             markPlanFailed(planId);
             publisher.send(emitter, "error", new SseDtos.ErrorEvent("PLAN_FAILED", safeErrorMessage(ex)));
             publisher.complete(emitter);
@@ -184,7 +212,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
     }
 
     /**
-     * 将行程状态切换为生成中，让历史列表能显示真实处理状态。
+     * 将计划状态切换为生成中。
      */
     private void markPlanGenerating(Long planId) {
         TripPlan plan = tripPlanMapper.selectById(planId);
@@ -192,39 +220,59 @@ public class TripPlanningServiceImpl implements TripPlanningService {
             plan.setStatus(TripPlanStatus.GENERATING.name());
             plan.setUpdatedAt(Instant.now());
             tripPlanMapper.updateById(plan);
+            log.info("行程状态更新为生成中，planId={}", planId);
+        } else {
+            log.warn("行程状态更新为生成中失败，planId={} reason=PLAN_NOT_FOUND", planId);
         }
     }
 
     /**
-     * 统一执行工具并记录调用日志，避免工具调用散落在编排流程里无法追踪。
+     * 统一执行工具并记录工具调用日志。
      */
     private ToolResult executeToolWithLog(String toolName, Long userId, Long planId, Map<String, Object> arguments) throws JsonProcessingException {
         Instant start = Instant.now();
+        log.info("MCP 工具调用开始，planId={} userId={} toolName={} arguments={}", planId, userId, toolName, arguments);
         try {
             ToolResult result = toolRegistry.execute(toolName, new ToolRequest(userId, planId, arguments));
             recordToolLog(userId, planId, toolName, arguments, result.summary(), start, true, null);
+            log.info("MCP 工具调用成功，planId={} toolName={} durationMs={} success={} summaryLength={}",
+                    planId,
+                    toolName,
+                    Duration.between(start, Instant.now()).toMillis(),
+                    result.success(),
+                    result.summary() == null ? 0 : result.summary().length());
             return result;
         } catch (RuntimeException ex) {
             recordToolLog(userId, planId, toolName, arguments, null, start, false, ex.getMessage());
+            log.warn("MCP 工具调用失败，planId={} toolName={} durationMs={} message={}",
+                    planId,
+                    toolName,
+                    Duration.between(start, Instant.now()).toMillis(),
+                    ex.getMessage(),
+                    ex);
             throw ex;
         }
     }
 
     /**
-     * 基于前两个景点生成一条路线建议；景点不足时退化为城市内交通建议。
+     * 基于候选景点生成一条路由建议。
      */
     private ToolResult executeRouteTool(Long userId, Long planId, String city, List<Map<String, Object>> places) throws JsonProcessingException {
         String from = places.isEmpty() ? city + "酒店" : String.valueOf(places.get(0).getOrDefault("name", city + "酒店"));
         String to = places.size() < 2 ? city + "精选景点" : String.valueOf(places.get(1).getOrDefault("name", city + "精选景点"));
+        log.info("生成路线工具入参，planId={} from={} to={}", planId, from, to);
         return executeToolWithLog("route.plan", userId, planId, Map.of("from", from, "to", to));
     }
 
     /**
-     * 从工具返回结构中提取景点列表，并把 Map key 统一转换为 String。
+     * 从工具结果中提取景点列表。
      */
     private List<Map<String, Object>> extractPlaces(ToolResult places) {
         Object rawPlaces = places.data().get("places");
         if (!(rawPlaces instanceof List<?> list)) {
+            log.warn("景点工具未返回列表结构，toolName={} dataKeys={}",
+                    places.toolName(),
+                    places.data() == null ? List.of() : places.data().keySet());
             return List.of();
         }
         return list.stream()
@@ -235,7 +283,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
     }
 
     /**
-     * 将未知 key 类型的 Map 转换为 String key，便于后续规划组件安全读取。
+     * 统一将未知 key 类型的 Map 转为 String key。
      */
     private Map<String, Object> stringKeyMap(Map<?, ?> source) {
         Map<String, Object> target = new LinkedHashMap<>();
@@ -244,7 +292,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
     }
 
     /**
-     * 调用 AI Client 输出行程摘要；响应同时作为 ai_delta 事件推给前端并写入调用日志。
+     * 流式生成 AI 行程总结并同步推送前端增量内容。
      */
     private String streamAiSummary(
             Long userId,
@@ -275,21 +323,35 @@ public class TripPlanningServiceImpl implements TripPlanningService {
         ));
         Instant start = Instant.now();
         StringBuilder response = new StringBuilder();
+        log.info("AI 总结生成开始，planId={} model={} promptLength={}",
+                planId,
+                openAiChatProperties.getOptions().getModel(),
+                prompt.length());
         try {
             aiChatClient.streamChat(new ChatRequest(List.of(new ChatRequest.Message("user", prompt)), true), text -> {
                 response.append(text);
                 publisher.send(emitter, "ai_delta", new SseDtos.AiDeltaEvent(text));
             });
             recordLlmLog(userId, planId, prompt, response.toString(), start, true, null);
+            log.info("AI 总结生成完成，planId={} durationMs={} responseLength={}",
+                    planId,
+                    Duration.between(start, Instant.now()).toMillis(),
+                    response.length());
             return response.toString();
         } catch (RuntimeException ex) {
             recordLlmLog(userId, planId, prompt, response.toString(), start, false, ex.getMessage());
+            log.warn("AI 总结生成失败，planId={} durationMs={} partialResponseLength={} message={}",
+                    planId,
+                    Duration.between(start, Instant.now()).toMillis(),
+                    response.length(),
+                    ex.getMessage(),
+                    ex);
             throw ex;
         }
     }
 
     /**
-     * 将预算提醒确定性追加到摘要中，避免完全依赖模型临场输出。
+     * 将预算提醒附加到总结末尾。
      */
     private String appendBudgetWarning(String summary, BudgetEstimator.BudgetDraft budget) {
         if (budget == null || !budget.insufficient() || budget.warningMessage() == null || budget.warningMessage().isBlank()) {
@@ -305,7 +367,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
     }
 
     /**
-     * 把预算风险状态并入预算工具结果，便于前端直接展示预算紧张提示。
+     * 丰富预算工具结构化结果，给前端直接展示预算风险使用。
      */
     private Map<String, Object> enrichBudgetToolData(Map<String, Object> source, BudgetEstimator.BudgetDraft budget) {
         Map<String, Object> target = new LinkedHashMap<>();
@@ -319,7 +381,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
     }
 
     /**
-     * 持久化生成完成的行程主表、每日安排、条目和预算明细。
+     * 持久化已生成的计划、日程、条目和预算明细。
      */
     private void persistGeneratedPlan(
             Long planId,
@@ -331,6 +393,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
     ) throws JsonProcessingException {
         TripPlan plan = tripPlanMapper.selectById(planId);
         if (plan == null) {
+            log.warn("持久化生成结果失败，planId={} reason=PLAN_NOT_FOUND", planId);
             return;
         }
         plan.setStatus(TripPlanStatus.GENERATED.name());
@@ -344,13 +407,14 @@ public class TripPlanningServiceImpl implements TripPlanningService {
         )));
         plan.setUpdatedAt(Instant.now());
         tripPlanMapper.updateById(plan);
+        log.info("行程主表更新完成，planId={} status={} totalBudget={}", planId, plan.getStatus(), plan.getTotalBudget());
 
         persistDaysAndItems(planId, schedules, budget, weatherSummary);
         persistBudget(planId, budget);
     }
 
     /**
-     * 将每日行程草案落到 trip_day 和 trip_item，供历史详情后续读取。
+     * 持久化每日行程和行程条目。
      */
     private void persistDaysAndItems(
             Long planId,
@@ -359,9 +423,9 @@ public class TripPlanningServiceImpl implements TripPlanningService {
             String weatherSummary
     ) {
         BigDecimal dailyBudget = budget.total().divide(BigDecimal.valueOf(Math.max(schedules.size(), 1)), 2, RoundingMode.HALF_UP);
+        int persistedItemCount = 0;
         for (DaySchedulePlanner.DaySchedule schedule : schedules) {
             TripDay day = new TripDay();
-            day.setId(newPositiveId());
             day.setPlanId(planId);
             day.setDayIndex(schedule.dayIndex());
             day.setDate(schedule.date());
@@ -369,10 +433,14 @@ public class TripPlanningServiceImpl implements TripPlanningService {
             day.setWeatherSummary(weatherSummary);
             day.setDailyBudget(dailyBudget);
             tripDayMapper.insert(day);
+            log.info("行程天已保存，planId={} dayId={} dayIndex={} itemCount={}",
+                    planId,
+                    day.getId(),
+                    schedule.dayIndex(),
+                    schedule.items().size());
 
             for (DaySchedulePlanner.PlanItemDraft itemDraft : schedule.items()) {
                 TripItem item = new TripItem();
-                item.setId(newPositiveId());
                 item.setDayId(day.getId());
                 item.setTimeSlot(itemDraft.timeSlot());
                 item.setPlaceName(itemDraft.placeName());
@@ -382,12 +450,18 @@ public class TripPlanningServiceImpl implements TripPlanningService {
                 item.setEstimatedCost(estimateItemCost(dailyBudget, schedule.items().size()));
                 item.setReason(itemDraft.reason());
                 tripItemMapper.insert(item);
+                persistedItemCount++;
             }
         }
+        log.info("行程天和条目保存完成，planId={} dayCount={} itemCount={} dailyBudget={}",
+                planId,
+                schedules.size(),
+                persistedItemCount,
+                dailyBudget);
     }
 
     /**
-     * 按单日预算和条目数量粗略拆分单条活动成本，避免历史详情里成本信息全部为零。
+     * 按单日预算和条目数估算单条活动成本。
      */
     private BigDecimal estimateItemCost(BigDecimal dailyBudget, int itemCount) {
         if (dailyBudget == null || itemCount <= 0) {
@@ -397,11 +471,10 @@ public class TripPlanningServiceImpl implements TripPlanningService {
     }
 
     /**
-     * 保存预算拆分明细，便于行程详情页展示成本结构。
+     * 保存预算拆分明细。
      */
     private void persistBudget(Long planId, BudgetEstimator.BudgetDraft budget) throws JsonProcessingException {
         BudgetBreakdown breakdown = new BudgetBreakdown();
-        breakdown.setId(newPositiveId());
         breakdown.setPlanId(planId);
         breakdown.setHotelCost(budget.hotel());
         breakdown.setFoodCost(budget.food());
@@ -410,6 +483,11 @@ public class TripPlanningServiceImpl implements TripPlanningService {
         breakdown.setOtherCost(budget.other());
         breakdown.setDetailJson(objectMapper.writeValueAsString(budget));
         budgetBreakdownMapper.insert(breakdown);
+        log.info("预算明细保存完成，planId={} budgetId={} total={} insufficient={}",
+                planId,
+                breakdown.getId(),
+                budget.total(),
+                budget.insufficient());
     }
 
     /**
@@ -425,22 +503,21 @@ public class TripPlanningServiceImpl implements TripPlanningService {
             boolean success,
             String errorMessage
     ) throws JsonProcessingException {
-        ToolCallLog log = new ToolCallLog();
-        log.setId(newPositiveId());
-        log.setUserId(userId);
-        log.setPlanId(planId);
-        log.setToolName(toolName);
-        log.setRequestJson(objectMapper.writeValueAsString(arguments));
-        log.setResponseSummary(responseSummary);
-        log.setLatencyMs(Duration.between(start, Instant.now()).toMillis());
-        log.setSuccess(success);
-        log.setErrorMessage(errorMessage);
-        log.setCreatedAt(Instant.now());
-        toolCallLogMapper.insert(log);
+        ToolCallLog toolCallLog = new ToolCallLog();
+        toolCallLog.setUserId(userId);
+        toolCallLog.setPlanId(planId);
+        toolCallLog.setToolName(toolName);
+        toolCallLog.setRequestJson(objectMapper.writeValueAsString(arguments));
+        toolCallLog.setResponseSummary(responseSummary);
+        toolCallLog.setLatencyMs(Duration.between(start, Instant.now()).toMillis());
+        toolCallLog.setSuccess(success);
+        toolCallLog.setErrorMessage(errorMessage);
+        toolCallLog.setCreatedAt(Instant.now());
+        toolCallLogMapper.insert(toolCallLog);
     }
 
     /**
-     * 记录一次 LLM 调用日志。
+     * 记录一次大模型调用日志。
      */
     private void recordLlmLog(
             Long userId,
@@ -451,24 +528,23 @@ public class TripPlanningServiceImpl implements TripPlanningService {
             boolean success,
             String errorMessage
     ) {
-        LlmCallLog log = new LlmCallLog();
-        log.setId(newPositiveId());
-        log.setUserId(userId);
-        log.setPlanId(planId);
-        log.setProvider("spring-ai-openai");
-        log.setModel(openAiChatProperties.getOptions().getModel());
-        log.setPromptSummary(truncate(prompt));
-        log.setResponseSummary(truncate(response));
-        log.setTokenUsageJson("{}");
-        log.setLatencyMs(Duration.between(start, Instant.now()).toMillis());
-        log.setSuccess(success);
-        log.setErrorMessage(errorMessage);
-        log.setCreatedAt(Instant.now());
-        llmCallLogMapper.insert(log);
+        LlmCallLog llmCallLog = new LlmCallLog();
+        llmCallLog.setUserId(userId);
+        llmCallLog.setPlanId(planId);
+        llmCallLog.setProvider("spring-ai-openai");
+        llmCallLog.setModel(openAiChatProperties.getOptions().getModel());
+        llmCallLog.setPromptSummary(truncate(prompt));
+        llmCallLog.setResponseSummary(truncate(response));
+        llmCallLog.setTokenUsageJson("{}");
+        llmCallLog.setLatencyMs(Duration.between(start, Instant.now()).toMillis());
+        llmCallLog.setSuccess(success);
+        llmCallLog.setErrorMessage(errorMessage);
+        llmCallLog.setCreatedAt(Instant.now());
+        llmCallLogMapper.insert(llmCallLog);
     }
 
     /**
-     * 规划失败时将主表状态改为 FAILED，避免历史列表长期显示生成中。
+     * 规划失败时将主表状态改为 FAILED。
      */
     private void markPlanFailed(Long planId) {
         if (planId == null) {
@@ -479,18 +555,21 @@ public class TripPlanningServiceImpl implements TripPlanningService {
             plan.setStatus(TripPlanStatus.FAILED.name());
             plan.setUpdatedAt(Instant.now());
             tripPlanMapper.updateById(plan);
+            log.info("行程状态更新为失败，planId={}", planId);
+        } else {
+            log.warn("行程状态更新为失败失败，planId={} reason=PLAN_NOT_FOUND", planId);
         }
     }
 
     /**
-     * 将偏好空值统一为空列表，避免下游工具收到 null。
+     * 将偏好空值统一为不可变空列表。
      */
     private List<String> safePreferences(TripDtos.CreateTripRequest request) {
         return request.preferences() == null ? List.of() : request.preferences();
     }
 
     /**
-     * 限制日志摘要长度，避免大提示词直接撑大日志表。
+     * 截断日志摘要长度，避免大段提示词或响应撑爆日志。
      */
     private String truncate(String value) {
         if (value == null || value.length() <= 1000) {
@@ -500,16 +579,9 @@ public class TripPlanningServiceImpl implements TripPlanningService {
     }
 
     /**
-     * 给前端返回稳定错误提示，避免空异常消息导致 UI 无法展示。
+     * 返回稳定的错误消息给前端。
      */
     private String safeErrorMessage(Exception ex) {
         return ex.getMessage() == null ? "行程生成失败" : ex.getMessage();
-    }
-
-    /**
-     * 生成正数主键，沿用当前项目的本地 UUID 主键策略。
-     */
-    private Long newPositiveId() {
-        return UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE;
     }
 }
