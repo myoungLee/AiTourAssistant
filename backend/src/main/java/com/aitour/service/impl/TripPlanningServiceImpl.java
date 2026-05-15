@@ -49,7 +49,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 流式行程规划服务，串联草稿创建、本地 MCP 工具、规划规则、AI 摘要和最终持久化。
+ * 流式行程规划服务，串联草稿创建、本地 MCP 工具、规则规划、AI 摘要和最终持久化。
  *
  * @author myoung
  */
@@ -148,14 +148,21 @@ public class TripPlanningServiceImpl implements TripPlanningService {
                     "peopleCount", request.peopleCount()
             ));
             publisher.send(emitter, "progress", new SseDtos.ProgressEvent("budget", "正在估算预算", 65));
-            publisher.send(emitter, "tool_result", new SseDtos.ToolResultEvent(budgetTool.toolName(), budgetTool.summary(), budgetTool.data()));
+            publisher.send(emitter, "tool_result", new SseDtos.ToolResultEvent(
+                    budgetTool.toolName(),
+                    appendBudgetWarning(budgetTool.summary(), budget),
+                    enrichBudgetToolData(budgetTool.data(), budget)
+            ));
 
             String weatherSummary = weatherRiskAnalyzer.summarize(weather.summary());
             List<DaySchedulePlanner.DaySchedule> schedules = daySchedulePlanner.plan(
                     request.startDate(),
                     request.days(),
                     request.destination(),
-                    rankedPlaces
+                    rankedPlaces,
+                    request.peopleCount(),
+                    safePreferences(request),
+                    budget
             );
             publisher.send(emitter, "progress", new SseDtos.ProgressEvent("compose", "正在生成每日行程", 80));
             for (DaySchedulePlanner.DaySchedule schedule : schedules) {
@@ -163,7 +170,8 @@ public class TripPlanningServiceImpl implements TripPlanningService {
             }
 
             String aiSummary = streamAiSummary(userId, request, planId, budget, weatherSummary, emitter);
-            persistGeneratedPlan(planId, schedules, budget, weatherSummary, aiSummary, List.of(weather, places, route, budgetTool));
+            String finalSummary = appendBudgetWarning(aiSummary, budget);
+            persistGeneratedPlan(planId, schedules, budget, weatherSummary, finalSummary, List.of(weather, places, route, budgetTool));
 
             publisher.send(emitter, "completed", new SseDtos.CompletedEvent(planId, TripPlanStatus.GENERATED.name()));
             publisher.complete(emitter);
@@ -212,7 +220,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
     }
 
     /**
-     * 从工具返回结构中抽取景点列表，并把 Map key 统一转换为 String。
+     * 从工具返回结构中提取景点列表，并把 Map key 统一转换为 String。
      */
     private List<Map<String, Object>> extractPlaces(ToolResult places) {
         Object rawPlaces = places.data().get("places");
@@ -251,6 +259,8 @@ public class TripPlanningServiceImpl implements TripPlanningService {
                 days=%s
                 people=%s
                 budget=%s
+                recommendedBudget=%s
+                budgetWarning=%s
                 weather=%s
                 userInput=%s
                 """.formatted(
@@ -258,6 +268,8 @@ public class TripPlanningServiceImpl implements TripPlanningService {
                 request.days(),
                 request.peopleCount(),
                 budget.total(),
+                budget.recommendedTotal(),
+                budget.warningMessage(),
                 weatherSummary,
                 request.userInput()
         ));
@@ -277,6 +289,36 @@ public class TripPlanningServiceImpl implements TripPlanningService {
     }
 
     /**
+     * 将预算提醒确定性追加到摘要中，避免完全依赖模型临场输出。
+     */
+    private String appendBudgetWarning(String summary, BudgetEstimator.BudgetDraft budget) {
+        if (budget == null || !budget.insufficient() || budget.warningMessage() == null || budget.warningMessage().isBlank()) {
+            return summary;
+        }
+        if (summary == null || summary.isBlank()) {
+            return budget.warningMessage();
+        }
+        if (summary.contains(budget.warningMessage())) {
+            return summary;
+        }
+        return summary + System.lineSeparator() + budget.warningMessage();
+    }
+
+    /**
+     * 把预算风险状态并入预算工具结果，便于前端直接展示预算紧张提示。
+     */
+    private Map<String, Object> enrichBudgetToolData(Map<String, Object> source, BudgetEstimator.BudgetDraft budget) {
+        Map<String, Object> target = new LinkedHashMap<>();
+        if (source != null) {
+            target.putAll(source);
+        }
+        target.put("recommendedTotal", budget.recommendedTotal());
+        target.put("insufficient", budget.insufficient());
+        target.put("warningMessage", budget.warningMessage());
+        return target;
+    }
+
+    /**
      * 持久化生成完成的行程主表、每日安排、条目和预算明细。
      */
     private void persistGeneratedPlan(
@@ -284,7 +326,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
             List<DaySchedulePlanner.DaySchedule> schedules,
             BudgetEstimator.BudgetDraft budget,
             String weatherSummary,
-            String aiSummary,
+            String finalSummary,
             List<ToolResult> toolResults
     ) throws JsonProcessingException {
         TripPlan plan = tripPlanMapper.selectById(planId);
@@ -292,7 +334,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
             return;
         }
         plan.setStatus(TripPlanStatus.GENERATED.name());
-        plan.setSummary(aiSummary);
+        plan.setSummary(finalSummary);
         plan.setTotalBudget(budget.total());
         plan.setRawAiResultJson(objectMapper.writeValueAsString(Map.of(
                 "weatherSummary", weatherSummary,
@@ -337,11 +379,21 @@ public class TripPlanningServiceImpl implements TripPlanningService {
                 item.setPlaceType(itemDraft.placeType());
                 item.setDurationMinutes(itemDraft.durationMinutes());
                 item.setTransportSuggestion("建议公共交通优先，必要时使用网约车衔接。");
-                item.setEstimatedCost(BigDecimal.ZERO);
-                item.setReason("基于本地 MCP 景点推荐和每日节奏生成。");
+                item.setEstimatedCost(estimateItemCost(dailyBudget, schedule.items().size()));
+                item.setReason(itemDraft.reason());
                 tripItemMapper.insert(item);
             }
         }
+    }
+
+    /**
+     * 按单日预算和条目数量粗略拆分单条活动成本，避免历史详情里成本信息全部为零。
+     */
+    private BigDecimal estimateItemCost(BigDecimal dailyBudget, int itemCount) {
+        if (dailyBudget == null || itemCount <= 0) {
+            return BigDecimal.ZERO;
+        }
+        return dailyBudget.divide(BigDecimal.valueOf(itemCount), 2, RoundingMode.HALF_UP);
     }
 
     /**
