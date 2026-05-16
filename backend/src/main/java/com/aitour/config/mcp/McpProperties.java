@@ -11,18 +11,18 @@ import java.time.Duration;
 import java.util.Locale;
 
 /**
- * MCP 工具模式配置，统一描述本地内置工具和外部 MCP Server 的切换方式。
+ * MCP 工具模式配置，统一描述外部 MCP Server 和显式本地测试模式的切换方式。
  *
  * @author myoung
  */
 @ConfigurationProperties(prefix = "mcp")
 public record McpProperties(
-        @DefaultValue("local") String mode,
+        @DefaultValue("external") String mode,
         @DefaultValue External external
 ) {
 
     /**
-     * 归一化模式和值对象，避免业务层重复处理空值和大小写差异。
+     * 归一化模式和值对象，未知模式直接失败，避免错误配置静默切到本地占位工具。
      */
     public McpProperties {
         mode = normalizeMode(mode);
@@ -37,14 +37,17 @@ public record McpProperties(
     }
 
     /**
-     * 归一化 MCP 模式，未知值统一回落到 local，避免错误配置直接放大影响面。
+     * 归一化 MCP 模式，只接受 external 和 local 两种显式配置。
      */
     private static String normalizeMode(String rawMode) {
         if (!StringUtils.hasText(rawMode)) {
-            return "local";
+            return "external";
         }
         String normalized = rawMode.trim().toLowerCase(Locale.ROOT);
-        return "external".equals(normalized) ? "external" : "local";
+        if ("external".equals(normalized) || "local".equals(normalized)) {
+            return normalized;
+        }
+        throw new IllegalArgumentException("mcp.mode 仅支持 external 或 local，当前值: " + rawMode);
     }
 
     /**

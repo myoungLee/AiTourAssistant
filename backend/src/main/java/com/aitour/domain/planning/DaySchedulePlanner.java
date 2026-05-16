@@ -3,9 +3,10 @@
  */
 package com.aitour.domain.planning;
 
+import com.aitour.common.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -35,7 +36,7 @@ public class DaySchedulePlanner {
             List<String> preferences,
             BudgetEstimator.BudgetDraft budget
     ) {
-        List<Map<String, Object>> safePlaces = normalizePlaces(city, places);
+        List<Map<String, Object>> safePlaces = validatePlaces(city, places);
         List<String> slots = chooseSlots(days, peopleCount, preferences, budget);
         List<DaySchedule> schedules = new ArrayList<>();
         int cursor = 0;
@@ -45,13 +46,13 @@ public class DaySchedulePlanner {
             for (String slot : slots) {
                 Map<String, Object> place = nextAvailablePlace(safePlaces, cursor, usedPlaceNames);
                 cursor = nextCursor(safePlaces, cursor, place);
-                String placeName = String.valueOf(place.getOrDefault("name", city + "精选景点"));
+                String placeName = requiredText(place, "name", "景点名称");
                 usedPlaceNames.add(placeName);
                 items.add(new PlanItemDraft(
                         slot,
                         placeName,
-                        String.valueOf(place.getOrDefault("type", "ATTRACTION")),
-                        numberValue(place.get("durationMinutes"), durationBySlot(slot, budget)),
+                        requiredText(place, "type", "景点类型"),
+                        durationValue(place.get("durationMinutes"), placeName, slot, budget),
                         reasonFor(slot, preferences, budget)
                 ));
             }
@@ -61,14 +62,14 @@ public class DaySchedulePlanner {
     }
 
     /**
-     * 为缺省或空的候选景点提供本地兜底，避免无景点时行程编排完全失败。
+     * 校验候选景点必须来自真实工具响应，缺失时直接失败而不是构造本地景点。
      */
-    private List<Map<String, Object>> normalizePlaces(String city, List<Map<String, Object>> places) {
+    private List<Map<String, Object>> validatePlaces(String city, List<Map<String, Object>> places) {
         if (places == null || places.isEmpty()) {
-            return List.of(
-                    Map.of("name", city + "城市地标", "type", "ATTRACTION", "durationMinutes", 120),
-                    Map.of("name", city + "特色街区", "type", "FOOD", "durationMinutes", 90),
-                    Map.of("name", city + "文化博物馆", "type", "CULTURE", "durationMinutes", 120)
+            throw new ApiException(
+                    HttpStatus.BAD_GATEWAY,
+                    "NO_PLACES_AVAILABLE",
+                    "景点工具未返回可用景点，无法为 " + city + " 生成真实行程"
             );
         }
         return places;
@@ -136,13 +137,33 @@ public class DaySchedulePlanner {
     }
 
     /**
-     * 将工具返回的数字字段转换为整数，缺失或类型不匹配时使用兜底值。
+     * 读取景点文本字段，缺失或空白时直接暴露工具响应质量问题。
      */
-    private Integer numberValue(Object value, int fallback) {
-        if (value instanceof Number number) {
+    private String requiredText(Map<String, Object> place, String key, String fieldName) {
+        Object value = place.get(key);
+        if (value instanceof String text && !text.isBlank()) {
+            return text;
+        }
+        throw new ApiException(
+                HttpStatus.BAD_GATEWAY,
+                "MCP_INVALID_RESPONSE",
+                fieldName + "字段缺失或为空，无法生成真实行程"
+        );
+    }
+
+    /**
+     * 将工具返回的游览时长转换为整数，缺失或非法时直接失败。
+     */
+    private Integer durationValue(Object value, String placeName, String slot, BudgetEstimator.BudgetDraft budget) {
+        if (value instanceof Number number && number.intValue() > 0) {
             return number.intValue();
         }
-        return fallback;
+        int suggestedDuration = durationBySlot(slot, budget);
+        throw new ApiException(
+                HttpStatus.BAD_GATEWAY,
+                "MCP_INVALID_RESPONSE",
+                "景点 " + placeName + " 缺少合法 durationMinutes，建议工具返回约 " + suggestedDuration + " 分钟的真实游览时长"
+        );
     }
 
     /**

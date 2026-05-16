@@ -4,6 +4,9 @@
 package com.aitour.controller;
 
 import com.aitour.client.ai.AiChatClient;
+import com.aitour.client.mcp.McpToolRegistry;
+import com.aitour.client.mcp.ToolRequest;
+import com.aitour.client.mcp.ToolResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,13 +18,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 import static com.aitour.support.RedisMockSupport.wireInMemoryRedis;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -40,6 +46,9 @@ class TripStreamControllerTest {
 
     @MockitoBean
     private AiChatClient aiChatClient;
+
+    @MockitoBean
+    private McpToolRegistry toolRegistry;
 
     @MockitoBean
     private StringRedisTemplate stringRedisTemplate;
@@ -62,6 +71,7 @@ class TripStreamControllerTest {
      */
     @Test
     void shouldStartStreamPlanRequest() throws Exception {
+        mockToolRegistrySuccessResponses();
         mockAiStreamResponse();
         String token = registerAndGetToken();
 
@@ -127,6 +137,27 @@ class TripStreamControllerTest {
                 .getResponse()
                 .getContentAsString();
         return body.replaceAll(".*\"planId\":([0-9]+).*", "$1");
+    }
+
+    /**
+     * 使用测试替身提供真实结构的 MCP 响应，避免流式接口测试依赖运行时占位工具。
+     */
+    private void mockToolRegistrySuccessResponses() {
+        when(toolRegistry.mode()).thenReturn("external-test");
+        when(toolRegistry.execute(eq("weather.query"), any(ToolRequest.class)))
+                .thenReturn(new ToolResult("weather.query", true, "成都天气晴朗，适合户外游览。", Map.of("city", "成都")));
+        when(toolRegistry.execute(eq("place.search"), any(ToolRequest.class)))
+                .thenReturn(new ToolResult("place.search", true, "返回成都真实测试景点。", Map.of(
+                        "places", List.of(
+                                Map.of("name", "成都武侯祠", "type", "culture", "durationMinutes", 120),
+                                Map.of("name", "锦里古街", "type", "food", "durationMinutes", 90),
+                                Map.of("name", "杜甫草堂", "type", "culture", "durationMinutes", 120)
+                        )
+                )));
+        when(toolRegistry.execute(eq("route.plan"), any(ToolRequest.class)))
+                .thenReturn(new ToolResult("route.plan", true, "成都武侯祠到锦里古街步行约 15 分钟。", Map.of("transport", "步行")));
+        when(toolRegistry.execute(eq("budget.estimate"), any(ToolRequest.class)))
+                .thenReturn(new ToolResult("budget.estimate", true, "外部 MCP 已返回预算估算。", Map.of("total", 2600)));
     }
 
     /**

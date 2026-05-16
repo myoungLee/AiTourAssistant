@@ -24,7 +24,7 @@ public final class SseDtos {
     }
 
     /**
-     * 表示 AI 文本增量或本地兜底摘要片段。
+     * 表示 AI 文本增量片段。
      */
     public record AiDeltaEvent(String text) {
     }

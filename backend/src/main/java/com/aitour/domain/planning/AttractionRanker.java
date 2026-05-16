@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 景点排序规则组件，第一版使用稳定的名称排序保证本地演示结果可复现。
+ * 景点排序规则组件，第一版对真实工具返回的景点做稳定名称排序。
  *
  * @author myoung
  */

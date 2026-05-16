@@ -30,6 +30,14 @@ spring:
       password: young
       timeout: 2s
   ai:
+    model:
+      chat: openai
+      embedding: none
+      image: none
+      audio:
+        speech: none
+        transcription: none
+      moderation: none
     openai:
       base-url: https://www.micuapi.ai
       api-key: ${AI_API_KEY:}
@@ -54,7 +62,7 @@ security:
     refresh-token-days: 14
 
 mcp:
-  mode: local
+  mode: external
   external:
     base-url:
     timeout-seconds: 10

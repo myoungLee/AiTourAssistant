@@ -3,14 +3,10 @@
  */
 package com.aitour.client.mcp;
 
-import com.aitour.client.mcp.external.ExternalMcpToolAdapter;
-import com.aitour.client.mcp.local.LocalWeatherTool;
 import com.aitour.common.exception.ApiException;
 import com.aitour.config.mcp.McpProperties;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.client.RestClient;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -25,20 +21,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class McpToolRegistryModeTest {
 
     /**
-     * local 模式下，应始终走内置工具实现。
+     * local 模式下，如果工具仍是占位实现，应直接暴露禁用错误。
      */
     @Test
-    void shouldUseLocalToolWhenModeIsLocal() {
+    void shouldExposeDisabledErrorWhenModeIsLocal() {
         McpToolRegistry registry = new McpToolRegistry(
-                List.of(new LocalWeatherTool()),
-                List.of(new ExternalMcpToolAdapter(newRestClient(), new McpProperties("local", new McpProperties.External("", 10)), "weather.query")),
+                List.of(new DisabledLocalTool("weather.query")),
+                List.of(new StubExternalTool("weather.query")),
                 new McpProperties("local", new McpProperties.External("", 10))
         );
 
-        ToolResult result = registry.execute("weather.query", new ToolRequest(1L, 2L, Map.of("city", "成都")));
-
-        assertThat(result.success()).isTrue();
-        assertThat(result.summary()).contains("成都");
+        assertThatThrownBy(() -> registry.execute("weather.query", new ToolRequest(1L, 2L, Map.of("city", "成都"))))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("本地占位工具已禁用");
     }
 
     /**
@@ -47,7 +42,7 @@ class McpToolRegistryModeTest {
     @Test
     void shouldUseExternalToolWhenModeIsExternal() {
         McpToolRegistry registry = new McpToolRegistry(
-                List.of(new LocalWeatherTool()),
+                List.of(new DisabledLocalTool("weather.query")),
                 List.of(new StubExternalTool("weather.query")),
                 new McpProperties("external", new McpProperties.External("http://localhost:8089", 10))
         );
@@ -59,26 +54,29 @@ class McpToolRegistryModeTest {
     }
 
     /**
-     * external 模式未配置 baseUrl 或外部调用失败时，应抛出可追踪的业务异常。
+     * external 模式缺少外部工具时，应抛出可追踪的工具不存在异常。
      */
     @Test
-    void shouldThrowTraceableErrorWhenExternalCallFails() {
+    void shouldThrowTraceableErrorWhenExternalToolIsMissing() {
         McpToolRegistry registry = new McpToolRegistry(
-                List.of(new LocalWeatherTool()),
-                List.of(new ExternalMcpToolAdapter(newRestClient(), new McpProperties("external", new McpProperties.External("http://localhost:65530", 1)), "weather.query")),
-                new McpProperties("external", new McpProperties.External("http://localhost:65530", 1))
+                List.of(new DisabledLocalTool("weather.query")),
+                List.of(),
+                new McpProperties("external", new McpProperties.External("http://localhost:8089", 1))
         );
 
         assertThatThrownBy(() -> registry.execute("weather.query", new ToolRequest(1L, 2L, Map.of("city", "成都"))))
                 .isInstanceOf(ApiException.class)
-                .hasMessageContaining("外部 MCP Server");
+                .hasMessageContaining("工具不存在");
     }
 
     /**
-     * 创建用于构造外部适配器的 RestClient。
+     * 未知 mcp.mode 应在属性构造阶段失败，避免静默回落到 local。
      */
-    private RestClient newRestClient() {
-        return RestClient.builder().build();
+    @Test
+    void shouldRejectUnknownMcpMode() {
+        assertThatThrownBy(() -> new McpProperties("demo", new McpProperties.External("", 10)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mcp.mode");
     }
 
     /**
@@ -99,6 +97,27 @@ class McpToolRegistryModeTest {
         @Override
         public ToolResult execute(ToolRequest request) {
             return new ToolResult(name, true, "来自外部 MCP Server", Map.of("source", "external"));
+        }
+    }
+
+    /**
+     * 本地占位工具测试替身，用于验证 local 模式不会伪造成功结果。
+     */
+    private static final class DisabledLocalTool implements TravelTool {
+        private final String name;
+
+        private DisabledLocalTool(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+
+        @Override
+        public ToolResult execute(ToolRequest request) {
+            throw new ApiException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "LOCAL_MCP_TOOL_DISABLED", "本地占位工具已禁用");
         }
     }
 }

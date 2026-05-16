@@ -16,7 +16,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 工具注册表，按当前 MCP 模式分发工具调用，业务层不需要感知本地或外部实现差异。
+ * 工具注册表，按当前 MCP 模式分发工具调用，默认面向真实外部 MCP Server。
  *
  * @author myoung
  */
@@ -48,7 +48,7 @@ public class McpToolRegistry {
     }
 
     /**
-     * 按当前 MCP 模式分发工具调用，本地模式走内置实现，外部模式走真实 MCP Server。
+     * 按当前 MCP 模式分发工具调用，外部模式走真实 MCP Server，本地模式仅用于显式诊断。
      */
     public ToolResult execute(String name, ToolRequest request) {
         TravelTool tool = activeTools().get(name);

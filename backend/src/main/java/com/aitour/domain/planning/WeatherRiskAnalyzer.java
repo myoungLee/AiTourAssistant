@@ -3,6 +3,8 @@
  */
 package com.aitour.domain.planning;
 
+import com.aitour.common.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 /**
@@ -14,11 +16,11 @@ import org.springframework.stereotype.Component;
 public class WeatherRiskAnalyzer {
 
     /**
-     * 根据天气摘要生成风险提示，第一版只做轻量规则判断。
+     * 根据真实天气摘要生成风险提示，摘要缺失时直接失败。
      */
     public String summarize(String weatherSummary) {
         if (weatherSummary == null || weatherSummary.isBlank()) {
-            return "天气信息暂缺，建议出行前再次确认。";
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "MCP_INVALID_RESPONSE", "天气工具返回摘要为空，无法生成真实天气提醒");
         }
         if (weatherSummary.contains("雨")) {
             return weatherSummary + " 建议准备雨具，并优先安排室内景点。";

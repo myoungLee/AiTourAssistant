@@ -4,7 +4,7 @@
 package com.aitour.client.mcp;
 
 /**
- * 旅行工具统一接口，本地工具和外部 MCP Server 适配器都实现该接口。
+ * 旅行工具统一接口，生产流程优先使用外部 MCP Server 适配器。
  *
  * @author myoung
  */

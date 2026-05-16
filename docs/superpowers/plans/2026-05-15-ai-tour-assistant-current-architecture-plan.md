@@ -6,7 +6,7 @@
 
 **Goal:** 基于当前已经确定的 Spring Boot + Vue 前后端分离架构，继续完成 AI 旅游助手的可用闭环：登录后提交出行需求，系统通过 AI 与 MCP 工具流式生成行程，并持久化用户、行程、工具调用和预算数据。
 
-**Architecture:** 后端是单体 Spring Boot 应用，使用内嵌 Tomcat、Druid、MyBatis-Plus、Flyway、MySQL 和 Redis；Controller 只接收字段参数并统一返回 `Result<T>`，SSE 接口按协议返回 `SseEmitter`；Service 根包只放接口，实现类统一放在 `service.impl`。AI 调用使用 Spring AI 官方 OpenAI ChatClient，底层通过 OpenAI-compatible 中转地址访问 `gpt-5.4`，推理等级为 `high`；MCP 工具默认使用本地内置实现，配置后可切换外部 MCP Server；第一版不引入 RocketMQ。
+**Architecture:** 后端是单体 Spring Boot 应用，使用内嵌 Tomcat、Druid、MyBatis-Plus、Flyway、MySQL 和 Redis；Controller 只接收字段参数并统一返回 `Result<T>`，SSE 接口按协议返回 `SseEmitter`；Service 根包只放接口，实现类统一放在 `service.impl`。AI 调用使用 Spring AI 官方 OpenAI ChatClient，底层通过 OpenAI-compatible 中转地址访问 `gpt-5.4`，推理等级为 `high`；MCP 工具默认使用真实外部 MCP Server，未配置或调用失败时显式失败并记录日志，不再用本地占位工具构造天气、景点、路线或预算数据；第一版不引入 RocketMQ。
 
 **Tech Stack:** JDK 21、Spring Boot 3、Spring AI、embedded Tomcat、Druid、MyBatis-Plus、Flyway、MySQL、Redis、Spring Security、springdoc-openapi、Vue 3、Vite、Element Plus、Pinia、Axios、ReadableStream。
 
@@ -32,7 +32,7 @@
 - [x] Task 1: 前端适配统一 `Result<T>` 和字段参数。已完成并推送。
 - [x] Task 2: 完善前端核心页面。已完成并推送。
 - [x] Task 3: Redis 登录态与缓存使用落地。已完成并推送。
-- [x] Task 4: MCP 工具模式配置化增强。已完成本地/外部 MCP 模式切换与真实外部 MCP 调用能力，并已推送。
+- [x] Task 4: MCP 工具模式配置化增强。已完成外部 MCP 调用能力和本地占位工具禁用策略，并已推送。
 - [x] Task 5: 行程生成质量和持久化细化。已完成预算提醒、节奏调整、同日去重和调用日志测试补齐，并已推送。
 - [x] Task 6: Swagger 和接口测试文档补齐。已补齐字段参数文档校验、明确响应 schema 和 Swagger 使用说明，并已推送。
 - [x] Task 7: 本地联调和交付清单。已补齐本地冒烟清单、README 交付说明，并完成当前环境的后端/前端/接口联调验证。
@@ -46,7 +46,7 @@
 - 本机默认启动方式：直接使用 `backend/src/main/resources/application.yml`，不再以 dev profile 作为默认入口。
 - 认证与用户资料：注册、登录、当前用户、用户偏好更新。
 - 行程持久化：行程草稿、历史列表、详情查询、行程生成结果相关表。
-- AI 与 MCP：Spring AI OpenAI ChatClient，本地 MCP 风格天气、景点、路线、预算工具，外部 MCP 适配入口。
+- AI 与 MCP：Spring AI OpenAI ChatClient，真实外部 MCP Server 负责天气、景点、路线、预算工具调用；本地占位工具仅保留为显式失败保护，不生成模拟数据。
 - SSE：流式行程生成和二次调整接口。
 - Swagger：通过 springdoc-openapi 生成接口测试文档。
 - 接口契约：普通 REST 接口统一返回 `Result<T>`，业务数据放在 `data` 字段。
@@ -409,7 +409,7 @@ git commit -m "feat: 落地 Redis 登录态与退出登录"
 
 ## Task 4: MCP 工具模式配置化增强
 
-> 状态：已完成并推送。已补充 `mcp.mode` / `mcp.external.*` 配置、`McpToolRegistry` 模式路由、真实外部 MCP Server HTTP/JSON-RPC 调用和对应测试，不再重复改模型接入。
+> 状态：已完成并推送。已补充 `mcp.mode` / `mcp.external.*` 配置、`McpToolRegistry` 模式路由、真实外部 MCP Server HTTP/JSON-RPC 调用和对应测试；后续已调整为默认 `external`，本地占位工具不再返回模拟结果。
 
 **Files:**
 
@@ -425,7 +425,7 @@ git commit -m "feat: 落地 Redis 登录态与退出登录"
 
 ```yaml
 mcp:
-  mode: local
+  mode: external
   external:
     base-url:
     timeout-seconds: 10
@@ -434,9 +434,9 @@ mcp:
 验收标准：
 
 ```text
-mcp.mode=local 时始终使用内置工具。
-mcp.mode=external 且配置 base-url 后，优先调用外部 MCP Server。
-外部调用失败时返回可追踪错误，不吞异常。
+mcp.mode=external 且配置 base-url 后，调用外部 MCP Server。
+mcp.mode=external 未配置 base-url、外部调用失败或工具响应缺少关键字段时返回可追踪错误，不吞异常。
+mcp.mode=local 仅保留为显式测试/诊断模式，本地占位工具不生成模拟数据，调用时直接返回禁用错误。
 ```
 
 - [ ] **Step 2: 保持 Spring AI 既有配置不回退**

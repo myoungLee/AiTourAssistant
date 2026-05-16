@@ -4,9 +4,11 @@
 package com.aitour.config.mcp;
 
 import com.aitour.client.mcp.external.ExternalMcpToolAdapter;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
@@ -18,6 +20,15 @@ import org.springframework.web.client.RestClient;
 @Configuration
 @EnableConfigurationProperties(McpProperties.class)
 public class McpConfig {
+
+    /**
+     * 提供项目统一 RestClient.Builder，避免默认构建器在受限环境中触发 loopback 初始化失败。
+     */
+    @Bean
+    @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
+    RestClient.Builder applicationRestClientBuilder() {
+        return RestClient.builder().requestFactory(new SimpleClientHttpRequestFactory());
+    }
 
     /**
      * 为外部 MCP 调用提供带超时控制的 RestClient，避免请求长期阻塞规划流程。

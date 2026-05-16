@@ -3,6 +3,7 @@
  */
 package com.aitour.controller;
 
+import com.aitour.client.mcp.McpToolRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static com.aitour.support.RedisMockSupport.wireInMemoryRedis;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -40,6 +42,9 @@ class ToolControllerTest {
     @MockitoBean
     private ValueOperations<String, String> valueOperations;
 
+    @MockitoBean
+    private McpToolRegistry toolRegistry;
+
     private final Map<String, String> redisStore = new ConcurrentHashMap<>();
 
     /**
@@ -55,12 +60,14 @@ class ToolControllerTest {
      */
     @Test
     void shouldReturnToolStatus() throws Exception {
+        when(toolRegistry.mode()).thenReturn("external-test");
+        when(toolRegistry.names()).thenReturn(java.util.List.of("weather.query", "place.search"));
         String token = registerAndGetToken();
 
         mockMvc.perform(get("/api/tools/status").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(1))
-                .andExpect(jsonPath("$.data.mode").value("local"))
+                .andExpect(jsonPath("$.data.mode").value("external-test"))
                 .andExpect(jsonPath("$.data.tools").isArray());
     }
 

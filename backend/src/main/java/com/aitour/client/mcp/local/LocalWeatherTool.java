@@ -6,29 +6,41 @@ package com.aitour.client.mcp.local;
 import com.aitour.client.mcp.ToolRequest;
 import com.aitour.client.mcp.ToolResult;
 import com.aitour.client.mcp.TravelTool;
+import com.aitour.common.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
-
 /**
- * 本地天气占位工具，保证无外部 MCP Server 时系统也能跑通。
+ * 本地天气占位工具已禁用，避免运行时生成虚假天气数据。
  *
  * @author myoung
  */
 @Component
 public class LocalWeatherTool implements TravelTool {
+    /**
+     * 返回天气工具的标准名称。
+     */
     @Override
     public String name() {
         return "weather.query";
     }
 
+    /**
+     * 本地模式不再生成模拟天气，调用时直接暴露配置问题。
+     */
     @Override
     public ToolResult execute(ToolRequest request) {
-        String city = String.valueOf(request.arguments().getOrDefault("city", "目的地"));
-        return new ToolResult(name(), true, city + "未来天气整体适合出行，午后注意防晒或降雨。", Map.of(
-                "city", city,
-                "condition", "多云",
-                "temperature", "22-29"
-        ));
+        throw disabledException();
+    }
+
+    /**
+     * 构造统一的本地工具禁用异常，提醒必须配置真实外部 MCP 服务。
+     */
+    private ApiException disabledException() {
+        return new ApiException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "LOCAL_MCP_TOOL_DISABLED",
+                "本地天气占位工具已禁用，请配置 mcp.mode=external 和真实 mcp.external.base-url 后再调用 " + name()
+        );
     }
 }

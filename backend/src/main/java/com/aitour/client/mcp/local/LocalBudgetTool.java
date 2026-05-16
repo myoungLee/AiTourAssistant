@@ -6,49 +6,41 @@ package com.aitour.client.mcp.local;
 import com.aitour.client.mcp.ToolRequest;
 import com.aitour.client.mcp.ToolResult;
 import com.aitour.client.mcp.TravelTool;
+import com.aitour.common.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
-import java.util.Map;
-
 /**
- * 本地预算估算占位工具，按天数和人数给出粗略费用拆分。
+ * 本地预算占位工具已禁用，避免运行时生成模拟预算数据。
  *
  * @author myoung
  */
 @Component
 public class LocalBudgetTool implements TravelTool {
+    /**
+     * 返回预算估算工具的标准名称。
+     */
     @Override
     public String name() {
         return "budget.estimate";
     }
 
+    /**
+     * 本地模式不再生成模拟预算，调用时直接暴露配置问题。
+     */
     @Override
     public ToolResult execute(ToolRequest request) {
-        int days = numberArgument(request, "days", 3);
-        int people = numberArgument(request, "peopleCount", 2);
-        BigDecimal hotel = BigDecimal.valueOf(350L * Math.max(days - 1, 1) * people);
-        BigDecimal food = BigDecimal.valueOf(160L * days * people);
-        BigDecimal transport = BigDecimal.valueOf(80L * days * people);
-        BigDecimal ticket = BigDecimal.valueOf(120L * days * people);
-        BigDecimal other = BigDecimal.valueOf(60L * days * people);
-        BigDecimal total = hotel.add(food).add(transport).add(ticket).add(other);
-
-        return new ToolResult(name(), true, "预计总预算约 " + total + " 元。", Map.of(
-                "hotel", hotel,
-                "food", food,
-                "transport", transport,
-                "ticket", ticket,
-                "other", other,
-                "total", total
-        ));
+        throw disabledException();
     }
 
-    private int numberArgument(ToolRequest request, String key, int fallback) {
-        Object value = request.arguments().get(key);
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        return fallback;
+    /**
+     * 构造统一的本地工具禁用异常，提醒必须配置真实外部 MCP 服务。
+     */
+    private ApiException disabledException() {
+        return new ApiException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "LOCAL_MCP_TOOL_DISABLED",
+                "本地预算占位工具已禁用，请配置 mcp.mode=external 和真实 mcp.external.base-url 后再调用 " + name()
+        );
     }
 }

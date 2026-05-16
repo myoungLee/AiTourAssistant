@@ -9,6 +9,7 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -25,10 +26,11 @@ public class SpringAiChatClient implements AiChatClient {
     private final ChatClient chatClient;
 
     /**
-     * 使用 Spring AI 自动配置的 ChatModel 创建 ChatClient。
+     * 使用 Spring AI 自动配置的 ChatModel 创建 ChatClient；未配置模型时保留 Bean 并在调用阶段报错。
      */
-    public SpringAiChatClient(ChatModel chatModel) {
-        this.chatClient = ChatClient.builder(chatModel).build();
+    public SpringAiChatClient(ObjectProvider<ChatModel> chatModelProvider) {
+        ChatModel chatModel = chatModelProvider.getIfAvailable();
+        this.chatClient = chatModel == null ? null : ChatClient.builder(chatModel).build();
     }
 
     /**
@@ -37,10 +39,12 @@ public class SpringAiChatClient implements AiChatClient {
     @Override
     public String chat(ChatRequest request) {
         try {
-            return chatClient.prompt()
+            return requireChatClient().prompt()
                     .messages(toSpringAiMessages(request))
                     .call()
                     .content();
+        } catch (ApiException ex) {
+            throw ex;
         } catch (RuntimeException ex) {
             throw new ApiException(HttpStatus.BAD_GATEWAY, "AI_PROVIDER_ERROR", "AI 供应商调用失败");
         }
@@ -52,13 +56,15 @@ public class SpringAiChatClient implements AiChatClient {
     @Override
     public void streamChat(ChatRequest request, Consumer<String> onDelta) {
         try {
-            chatClient.prompt()
+            requireChatClient().prompt()
                     .messages(toSpringAiMessages(request))
                     .stream()
                     .content()
                     .toStream()
                     .filter(text -> text != null && !text.isBlank())
                     .forEach(onDelta);
+        } catch (ApiException ex) {
+            throw ex;
         } catch (RuntimeException ex) {
             throw new ApiException(HttpStatus.BAD_GATEWAY, "AI_PROVIDER_ERROR", "AI 供应商流式调用失败");
         }
@@ -81,5 +87,15 @@ public class SpringAiChatClient implements AiChatClient {
             return new SystemMessage(message.content());
         }
         return new UserMessage(message.content());
+    }
+
+    /**
+     * 获取已配置的 ChatClient，缺失时直接暴露模型配置问题。
+     */
+    private ChatClient requireChatClient() {
+        if (chatClient == null) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "AI_PROVIDER_NOT_CONFIGURED", "AI 模型客户端未配置，请检查 spring.ai.openai.* 和 AI_API_KEY");
+        }
+        return chatClient;
     }
 }

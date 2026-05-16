@@ -8,23 +8,24 @@ import com.aitour.client.mcp.ToolResult;
 import com.aitour.config.mcp.McpProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.mock.http.client.MockClientHttpRequest;
+import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 /**
  * 验证外部 MCP 适配器会按真实 HTTP/JSON-RPC 生命周期完成初始化、工具发现和工具调用。
@@ -34,31 +35,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ExternalMcpToolAdapterTest {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    private HttpServer server;
-
-    /**
-     * 测试结束后关闭本地模拟 MCP Server，避免端口和线程泄漏到后续用例。
-     */
-    @AfterEach
-    void tearDown() {
-        if (server != null) {
-            server.stop(0);
-        }
-    }
-
     /**
      * 外部模式下应完成 initialize、notifications/initialized、tools/list、tools/call 全流程。
      */
     @Test
     void shouldCallExternalMcpServerThroughLifecycle() throws Exception {
-        RecordingMcpHandler handler = new RecordingMcpHandler();
-        server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/mcp", handler);
-        server.start();
+        String baseUrl = "https://mcp.example.test/mcp";
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        RecordedRequests recordedRequests = new RecordedRequests();
+        prepareMcpLifecycleResponses(server, baseUrl, recordedRequests);
 
-        String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/mcp";
         McpProperties properties = new McpProperties("external", new McpProperties.External(baseUrl, 3));
-        ExternalMcpToolAdapter adapter = new ExternalMcpToolAdapter(RestClient.builder().build(), properties, "weather.query");
+        ExternalMcpToolAdapter adapter = new ExternalMcpToolAdapter(builder.build(), properties, "weather.query");
 
         assertThat(adapter.listAvailableToolNames()).containsExactly("weather.query");
 
@@ -67,95 +56,129 @@ class ExternalMcpToolAdapterTest {
         assertThat(result.success()).isTrue();
         assertThat(result.summary()).contains("成都天气晴朗");
         assertThat(result.data()).containsEntry("city", "成都");
-        assertThat(handler.methods()).containsExactly(
+        assertThat(recordedRequests.methods()).containsExactly(
                 "initialize",
                 "notifications/initialized",
                 "tools/list",
                 "tools/call"
         );
-        assertThat(handler.protocolHeaders()).containsExactly(
+        assertThat(recordedRequests.protocolHeaders()).containsExactly(
                 null,
                 "2025-06-18",
                 "2025-06-18",
                 "2025-06-18"
         );
-        assertThat(handler.sessionHeaders()).containsExactly(
+        assertThat(recordedRequests.sessionHeaders()).containsExactly(
                 null,
                 "session-123",
                 "session-123",
                 "session-123"
         );
+        server.verify();
     }
 
     /**
-     * 轻量模拟 MCP Server，记录请求顺序并按协议返回固定响应，供测试验证。
-     *
-     * @author myoung
+     * 准备 MCP 生命周期的 HTTP 响应，不启动本地端口，避免测试依赖 loopback。
      */
-    private static final class RecordingMcpHandler implements HttpHandler {
-        private final List<String> methods = new CopyOnWriteArrayList<>();
-        private final List<String> protocolHeaders = new CopyOnWriteArrayList<>();
-        private final List<String> sessionHeaders = new CopyOnWriteArrayList<>();
-
-        @Override
-        /**
-         * 按请求方法返回不同 MCP 响应，覆盖初始化、工具发现和工具调用阶段。
-         */
-        public void handle(HttpExchange exchange) throws IOException {
-            JsonNode request = readRequest(exchange.getRequestBody());
-            String method = request.path("method").asText();
-            methods.add(method);
-            protocolHeaders.add(exchange.getRequestHeaders().getFirst("MCP-Protocol-Version"));
-            sessionHeaders.add(exchange.getRequestHeaders().getFirst("Mcp-Session-Id"));
-
-            switch (method) {
-                case "initialize" -> writeJson(exchange, 200, Map.of(
+    private void prepareMcpLifecycleResponses(MockRestServiceServer server, String baseUrl, RecordedRequests recordedRequests) throws Exception {
+        expectJsonRpc(server, baseUrl, recordedRequests, "initialize")
+                .andRespond(withSuccess(json(Map.of(
                         "jsonrpc", "2.0",
-                        "id", request.path("id").asLong(),
+                        "id", 1,
                         "result", Map.of(
                                 "protocolVersion", "2025-06-18",
                                 "capabilities", Map.of(),
                                 "serverInfo", Map.of("name", "mock-mcp", "version", "1.0.0")
                         )
-                ), Map.of("Mcp-Session-Id", "session-123"));
-                case "notifications/initialized" -> writePlain(exchange, 202, "", Map.of());
-                case "tools/list" -> writeJson(exchange, 200, Map.of(
+                )), MediaType.APPLICATION_JSON).header("Mcp-Session-Id", "session-123"));
+
+        expectJsonRpc(server, baseUrl, recordedRequests, "notifications/initialized")
+                .andRespond(withStatus(HttpStatus.ACCEPTED));
+
+        expectJsonRpc(server, baseUrl, recordedRequests, "tools/list")
+                .andRespond(withSuccess(json(Map.of(
                         "jsonrpc", "2.0",
-                        "id", request.path("id").asLong(),
+                        "id", 2,
                         "result", Map.of(
                                 "tools", List.of(Map.of(
                                         "name", "weather.query",
                                         "description", "查询天气"
                                 ))
                         )
-                ), Map.of());
-                case "tools/call" -> {
-                    String city = request.path("params").path("arguments").path("city").asText("未知城市");
-                    writeJson(exchange, 200, Map.of(
-                            "jsonrpc", "2.0",
-                            "id", request.path("id").asLong(),
-                            "result", Map.of(
-                                    "content", List.of(Map.of(
-                                            "type", "text",
-                                            "text", city + "天气晴朗，适合出行"
-                                    )),
-                                    "structuredContent", Map.of(
-                                            "city", city,
-                                            "condition", "晴朗"
-                                    ),
-                                    "isError", false
-                            )
-                    ), Map.of());
-                }
-                default -> writeJson(exchange, 400, Map.of(
+                )), MediaType.APPLICATION_JSON));
+
+        expectJsonRpc(server, baseUrl, recordedRequests, "tools/call")
+                .andRespond(withSuccess(json(Map.of(
                         "jsonrpc", "2.0",
-                        "id", request.path("id").asLong(),
-                        "error", Map.of(
-                                "code", -32601,
-                                "message", "unknown method"
+                        "id", 3,
+                        "result", Map.of(
+                                "content", List.of(Map.of(
+                                        "type", "text",
+                                        "text", "成都天气晴朗，适合出行"
+                                )),
+                                "structuredContent", Map.of(
+                                        "city", "成都",
+                                        "condition", "晴朗"
+                                ),
+                                "isError", false
                         )
-                ), Map.of());
-            }
+                )), MediaType.APPLICATION_JSON));
+    }
+
+    /**
+     * 注册一次 JSON-RPC 请求期望，并记录方法名和 MCP 关键请求头。
+     */
+    private org.springframework.test.web.client.ResponseActions expectJsonRpc(
+            MockRestServiceServer server,
+            String baseUrl,
+            RecordedRequests recordedRequests,
+            String expectedMethod
+    ) {
+        return server.expect(requestTo(baseUrl))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(request -> {
+                    JsonNode requestBody = readRequest((MockClientHttpRequest) request);
+                    String actualMethod = requestBody.path("method").asText();
+                    recordedRequests.add(
+                            actualMethod,
+                            request.getHeaders().getFirst("MCP-Protocol-Version"),
+                            request.getHeaders().getFirst("Mcp-Session-Id")
+                    );
+                    assertThat(actualMethod).isEqualTo(expectedMethod);
+                });
+    }
+
+    /**
+     * 将响应对象序列化为 JSON 字符串，避免测试依赖手写 JSON 格式。
+     */
+    private String json(Map<String, Object> body) throws IOException {
+        return OBJECT_MAPPER.writeValueAsString(body);
+    }
+
+    /**
+     * 从 MockRestServiceServer 捕获的请求体中读取 JSON-RPC 消息。
+     */
+    private JsonNode readRequest(MockClientHttpRequest request) throws IOException {
+        return OBJECT_MAPPER.readTree(request.getBodyAsString());
+    }
+
+    /**
+     * 记录每次 MCP HTTP 请求的方法名、协议版本头和会话头。
+     *
+     * @author myoung
+     */
+    private static final class RecordedRequests {
+        private final List<String> methods = new CopyOnWriteArrayList<>();
+        private final List<String> protocolHeaders = new CopyOnWriteArrayList<>();
+        private final List<String> sessionHeaders = new CopyOnWriteArrayList<>();
+
+        /**
+         * 记录一次请求的关键观测字段。
+         */
+        private void add(String method, String protocolHeader, String sessionHeader) {
+            methods.add(method);
+            protocolHeaders.add(protocolHeader);
+            sessionHeaders.add(sessionHeader);
         }
 
         /**
@@ -177,38 +200,6 @@ class ExternalMcpToolAdapterTest {
          */
         private List<String> sessionHeaders() {
             return sessionHeaders;
-        }
-
-        /**
-         * 读取 JSON 请求体，避免在断言时依赖字符串拼接格式。
-         */
-        private JsonNode readRequest(InputStream inputStream) throws IOException {
-            return OBJECT_MAPPER.readTree(inputStream);
-        }
-
-        /**
-         * 输出 JSON 响应并支持附带响应头。
-         */
-        private void writeJson(HttpExchange exchange, int status, Map<String, Object> body, Map<String, String> headers) throws IOException {
-            headers.forEach((key, value) -> exchange.getResponseHeaders().add(key, value));
-            exchange.getResponseHeaders().add("Content-Type", "application/json");
-            byte[] bytes = OBJECT_MAPPER.writeValueAsBytes(body);
-            exchange.sendResponseHeaders(status, bytes.length);
-            try (OutputStream outputStream = exchange.getResponseBody()) {
-                outputStream.write(bytes);
-            }
-        }
-
-        /**
-         * 输出空文本响应，模拟 initialized 通知这类不返回 JSON-RPC 结果的场景。
-         */
-        private void writePlain(HttpExchange exchange, int status, String body, Map<String, String> headers) throws IOException {
-            headers.forEach((key, value) -> exchange.getResponseHeaders().add(key, value));
-            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(status, bytes.length);
-            try (OutputStream outputStream = exchange.getResponseBody()) {
-                outputStream.write(bytes);
-            }
         }
     }
 }

@@ -17,6 +17,7 @@ import com.aitour.common.entity.ToolCallLog;
 import com.aitour.common.entity.TripDay;
 import com.aitour.common.entity.TripItem;
 import com.aitour.common.entity.TripPlan;
+import com.aitour.common.exception.ApiException;
 import com.aitour.domain.TripPlanStatus;
 import com.aitour.domain.planning.AttractionRanker;
 import com.aitour.domain.planning.BudgetEstimator;
@@ -35,7 +36,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -61,7 +63,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
     private final McpToolRegistry toolRegistry;
     private final AiChatClient aiChatClient;
     private final PromptTemplateService promptTemplateService;
-    private final OpenAiChatProperties openAiChatProperties;
+    private final String aiModelName;
     private final AttractionRanker attractionRanker;
     private final DaySchedulePlanner daySchedulePlanner;
     private final BudgetEstimator budgetEstimator;
@@ -83,7 +85,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
             McpToolRegistry toolRegistry,
             AiChatClient aiChatClient,
             PromptTemplateService promptTemplateService,
-            OpenAiChatProperties openAiChatProperties,
+            @Value("${spring.ai.openai.chat.options.model:unknown}") String aiModelName,
             AttractionRanker attractionRanker,
             DaySchedulePlanner daySchedulePlanner,
             BudgetEstimator budgetEstimator,
@@ -101,7 +103,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
         this.toolRegistry = toolRegistry;
         this.aiChatClient = aiChatClient;
         this.promptTemplateService = promptTemplateService;
-        this.openAiChatProperties = openAiChatProperties;
+        this.aiModelName = aiModelName;
         this.attractionRanker = attractionRanker;
         this.daySchedulePlanner = daySchedulePlanner;
         this.budgetEstimator = budgetEstimator;
@@ -150,7 +152,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
 
             List<Map<String, Object>> rankedPlaces = attractionRanker.rank(extractPlaces(places));
             log.info("景点排序完成，planId={} rankedPlaceCount={}", planId, rankedPlaces.size());
-            ToolResult route = executeRouteTool(userId, planId, request.destination(), rankedPlaces);
+            ToolResult route = executeRouteTool(userId, planId, rankedPlaces);
             publisher.send(emitter, "tool_result", new SseDtos.ToolResultEvent(route.toolName(), route.summary(), route.data()));
 
             BudgetEstimator.BudgetDraft budget = budgetEstimator.estimate(request.days(), request.peopleCount(), request.budget());
@@ -255,31 +257,46 @@ public class TripPlanningServiceImpl implements TripPlanningService {
     }
 
     /**
-     * 基于候选景点生成一条路由建议。
+     * 基于真实候选景点生成一条路由建议，景点不足时直接失败。
      */
-    private ToolResult executeRouteTool(Long userId, Long planId, String city, List<Map<String, Object>> places) throws JsonProcessingException {
-        String from = places.isEmpty() ? city + "酒店" : String.valueOf(places.get(0).getOrDefault("name", city + "酒店"));
-        String to = places.size() < 2 ? city + "精选景点" : String.valueOf(places.get(1).getOrDefault("name", city + "精选景点"));
+    private ToolResult executeRouteTool(Long userId, Long planId, List<Map<String, Object>> places) throws JsonProcessingException {
+        if (places.size() < 2) {
+            throw new ApiException(
+                    HttpStatus.BAD_GATEWAY,
+                    "NO_ROUTE_PLACES_AVAILABLE",
+                    "景点工具返回少于 2 个可用景点，无法调用真实路线规划"
+            );
+        }
+        String from = requiredPlaceName(places.get(0), 1);
+        String to = requiredPlaceName(places.get(1), 2);
         log.info("生成路线工具入参，planId={} from={} to={}", planId, from, to);
         return executeToolWithLog("route.plan", userId, planId, Map.of("from", from, "to", to));
     }
 
     /**
-     * 从工具结果中提取景点列表。
+     * 从工具结果中提取景点列表，结构缺失时直接失败，避免后续构造模拟景点。
      */
     private List<Map<String, Object>> extractPlaces(ToolResult places) {
-        Object rawPlaces = places.data().get("places");
-        if (!(rawPlaces instanceof List<?> list)) {
-            log.warn("景点工具未返回列表结构，toolName={} dataKeys={}",
-                    places.toolName(),
-                    places.data() == null ? List.of() : places.data().keySet());
-            return List.of();
+        Map<String, Object> data = places.data();
+        if (data == null) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "MCP_INVALID_RESPONSE", "景点工具响应缺少结构化 data");
         }
-        return list.stream()
+        Object rawPlaces = data.get("places");
+        if (!(rawPlaces instanceof List<?> list)) {
+            log.warn("景点工具响应结构无效，toolName={} dataKeys={}",
+                    places.toolName(),
+                    data.keySet());
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "MCP_INVALID_RESPONSE", "景点工具响应缺少 places 数组");
+        }
+        List<Map<String, Object>> extractedPlaces = list.stream()
                 .filter(Map.class::isInstance)
                 .map(Map.class::cast)
                 .map(this::stringKeyMap)
                 .toList();
+        if (extractedPlaces.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "NO_PLACES_AVAILABLE", "景点工具未返回可用景点，无法生成真实行程");
+        }
+        return extractedPlaces;
     }
 
     /**
@@ -289,6 +306,21 @@ public class TripPlanningServiceImpl implements TripPlanningService {
         Map<String, Object> target = new LinkedHashMap<>();
         source.forEach((key, value) -> target.put(String.valueOf(key), value));
         return target;
+    }
+
+    /**
+     * 读取指定序号景点名称，缺失时直接暴露 MCP 响应质量问题。
+     */
+    private String requiredPlaceName(Map<String, Object> place, int index) {
+        Object value = place.get("name");
+        if (value instanceof String name && !name.isBlank()) {
+            return name;
+        }
+        throw new ApiException(
+                HttpStatus.BAD_GATEWAY,
+                "MCP_INVALID_RESPONSE",
+                "第 " + index + " 个景点缺少 name 字段，无法调用真实路线规划"
+        );
     }
 
     /**
@@ -325,7 +357,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
         StringBuilder response = new StringBuilder();
         log.info("AI 总结生成开始，planId={} model={} promptLength={}",
                 planId,
-                openAiChatProperties.getOptions().getModel(),
+                aiModelName,
                 prompt.length());
         try {
             aiChatClient.streamChat(new ChatRequest(List.of(new ChatRequest.Message("user", prompt)), true), text -> {
@@ -532,7 +564,7 @@ public class TripPlanningServiceImpl implements TripPlanningService {
         llmCallLog.setUserId(userId);
         llmCallLog.setPlanId(planId);
         llmCallLog.setProvider("spring-ai-openai");
-        llmCallLog.setModel(openAiChatProperties.getOptions().getModel());
+        llmCallLog.setModel(aiModelName);
         llmCallLog.setPromptSummary(truncate(prompt));
         llmCallLog.setResponseSummary(truncate(response));
         llmCallLog.setTokenUsageJson("{}");

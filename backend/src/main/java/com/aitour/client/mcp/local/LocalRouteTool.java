@@ -6,31 +6,41 @@ package com.aitour.client.mcp.local;
 import com.aitour.client.mcp.ToolRequest;
 import com.aitour.client.mcp.ToolResult;
 import com.aitour.client.mcp.TravelTool;
+import com.aitour.common.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
-
 /**
- * 本地路线估算占位工具，提供基础交通方式和耗时估算。
+ * 本地路线占位工具已禁用，避免运行时生成虚假路线数据。
  *
  * @author myoung
  */
 @Component
 public class LocalRouteTool implements TravelTool {
+    /**
+     * 返回路线规划工具的标准名称。
+     */
     @Override
     public String name() {
         return "route.plan";
     }
 
+    /**
+     * 本地模式不再生成模拟路线，调用时直接暴露配置问题。
+     */
     @Override
     public ToolResult execute(ToolRequest request) {
-        String from = String.valueOf(request.arguments().getOrDefault("from", "起点"));
-        String to = String.valueOf(request.arguments().getOrDefault("to", "终点"));
-        return new ToolResult(name(), true, from + " 到 " + to + " 建议公共交通优先，约 35 分钟。", Map.of(
-                "from", from,
-                "to", to,
-                "transport", "公共交通",
-                "durationMinutes", 35
-        ));
+        throw disabledException();
+    }
+
+    /**
+     * 构造统一的本地工具禁用异常，提醒必须配置真实外部 MCP 服务。
+     */
+    private ApiException disabledException() {
+        return new ApiException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "LOCAL_MCP_TOOL_DISABLED",
+                "本地路线占位工具已禁用，请配置 mcp.mode=external 和真实 mcp.external.base-url 后再调用 " + name()
+        );
     }
 }

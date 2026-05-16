@@ -6,33 +6,41 @@ package com.aitour.client.mcp.local;
 import com.aitour.client.mcp.ToolRequest;
 import com.aitour.client.mcp.ToolResult;
 import com.aitour.client.mcp.TravelTool;
+import com.aitour.common.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.Map;
-
 /**
- * 本地景点推荐占位工具，后续可替换为真实地图或外部 MCP 查询。
+ * 本地景点推荐占位工具已禁用，避免运行时生成虚假景点数据。
  *
  * @author myoung
  */
 @Component
 public class LocalPlaceSearchTool implements TravelTool {
+    /**
+     * 返回景点搜索工具的标准名称。
+     */
     @Override
     public String name() {
         return "place.search";
     }
 
+    /**
+     * 本地模式不再生成模拟景点，调用时直接暴露配置问题。
+     */
     @Override
     public ToolResult execute(ToolRequest request) {
-        String city = String.valueOf(request.arguments().getOrDefault("city", "目的地"));
-        return new ToolResult(name(), true, city + "推荐 3 个适合首次规划的景点。", Map.of(
-                "city", city,
-                "places", List.of(
-                        Map.of("name", city + "城市地标", "type", "landmark", "durationMinutes", 120),
-                        Map.of("name", city + "特色街区", "type", "food", "durationMinutes", 150),
-                        Map.of("name", city + "博物馆", "type", "culture", "durationMinutes", 90)
-                )
-        ));
+        throw disabledException();
+    }
+
+    /**
+     * 构造统一的本地工具禁用异常，提醒必须配置真实外部 MCP 服务。
+     */
+    private ApiException disabledException() {
+        return new ApiException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "LOCAL_MCP_TOOL_DISABLED",
+                "本地景点占位工具已禁用，请配置 mcp.mode=external 和真实 mcp.external.base-url 后再调用 " + name()
+        );
     }
 }
